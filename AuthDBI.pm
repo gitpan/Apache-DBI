@@ -1104,10 +1104,11 @@ L<Apache>, L<mod_perl>, L<DBI>
 
 =item *
 Apache::AuthDBI by Edmund Mergl; now maintained and supported by the
-modperl mailinglist.
+modperl mailinglist, subscribe by sending mail to
+modperl-subscribe@perl.apache.org.
 
 =item *
-mod_perl by Doug MacEachern <modperl-subscribe@apache.org>
+mod_perl by Doug MacEachern.
 
 =item *
 DBI by Tim Bunce <dbi-users-subscribe@perl.org>

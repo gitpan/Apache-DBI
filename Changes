@@ -1,5 +1,11 @@
 Revision history for ApacheDBI.
 
+0.90_02 January 10, 2003
+        - Changes to make Apache::DBI load and function under mod_perl
+          2.0.  A few important notes: connect_on_init does not work yet
+          and there's no automatic RollBack cleanup handler when
+          autocommit is turned off.
+
 0.90_01 January 10, 2003
         - Only call Apache::Status if Apache.pm is completely loaded
         - Make Test::More a prerequisite so we can do real tests

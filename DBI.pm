@@ -1,14 +1,15 @@
 package Apache::DBI;
-
-use Apache ();
-use DBI ();
 use strict;
 
-# $Id: DBI.pm,v 1.3 2003/01/10 08:18:02 ask Exp $
+# $Id: DBI.pm,v 1.5 2003/01/11 03:17:49 ask Exp $
+
+BEGIN { eval { require Apache } }
+use DBI ();
+use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.90_01';
+$Apache::DBI::VERSION = '0.90_02';
 
 # 1: report about new connect
 # 2: full debug output
@@ -29,6 +30,9 @@ my $Idx;          # key of %Connected and %Rollback.
 
 sub connect_on_init { 
     # provide a handler which creates all connections during server startup
+
+    # TODO - Should check for mod_perl 2 and do the right thing there
+    carp "Apache.pm was not loaded\n" and return unless $INC{'Apache.pm'};
     if(!@ChildConnect and Apache->can('push_handlers')) {
         Apache->push_handlers(PerlChildInitHandler => \&childinit);
     }
@@ -84,6 +88,7 @@ sub connect {
 
     # this PerlCleanupHandler is supposed to initiate a rollback after the script has finished if AutoCommit is off.
     my $needCleanup = ($Idx =~ /AutoCommit[^\d]+0/) ? 1 : 0;
+    # TODO - Fix mod_perl 2.0 here
     if(!$Rollback{$Idx} and $needCleanup and Apache->can('push_handlers')) {
         print STDERR "$prefix push PerlCleanupHandler \n" if $Apache::DBI::DEBUG > 1;
         Apache->push_handlers("PerlCleanupHandler", \&cleanup);
@@ -352,6 +357,11 @@ and that mod_perl needs to be configured with the appropriate call-back hooks:
 
   PERL_CHILD_INIT=1 PERL_STACKED_HANDLERS=1. 
 
+=head1 MOD_PERL 2.0
+
+Apache::DBI version 0.90_02 and later might work under mod_perl 2.0.
+See the Changes file for more information.  Also beware that it has
+only been tested very lightly.
 
 =head1 SEE ALSO
 
@@ -366,7 +376,7 @@ the modperl mailinglist, see the mod_perl documentation for
 instructions on how to subscribe).
 
 =item *
-mod_perl by Doug MacEachern <modperl@apache.org>
+mod_perl by Doug MacEachern.
 
 =item *
 DBI by Tim Bunce <dbi-users-subscribe@perl.org>

@@ -6,7 +6,7 @@ use DBI ();
 use IPC::SysV qw( IPC_CREAT IPC_RMID S_IRUSR S_IWUSR );
 use strict;
 
-# $Id: AuthDBI.pm,v 1.2 2002/06/18 05:49:39 ask Exp $
+# $Id: AuthDBI.pm,v 1.3 2003/02/17 13:00:12 ask Exp $
 
 require_version DBI 1.00;
 

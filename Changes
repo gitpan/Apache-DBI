@@ -1,5 +1,9 @@
 Revision history for ApacheDBI.
 
+0.91    February 17, 2003
+        - Retagged and released the 0.90_02 beta as 0.91. No code
+          changes.
+
 0.90_02 January 10, 2003
         - Changes to make Apache::DBI load and function under mod_perl
           2.0.  A few important notes: connect_on_init does not work yet

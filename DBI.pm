@@ -1,7 +1,7 @@
 package Apache::DBI;
 use strict;
 
-# $Id: DBI.pm,v 1.5 2003/01/11 03:17:49 ask Exp $
+# $Id: DBI.pm,v 1.6 2003/02/17 13:04:19 ask Exp $
 
 BEGIN { eval { require Apache } }
 use DBI ();
@@ -9,7 +9,7 @@ use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.90_02';
+$Apache::DBI::VERSION = '0.91';
 
 # 1: report about new connect
 # 2: full debug output

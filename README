@@ -1,6 +1,6 @@
 #-------------------------------------------------------
 #
-# $Id: README,v 1.3 2002/06/18 06:10:57 ask Exp $
+# $Id: README,v 1.4 2003/02/17 13:03:26 ask Exp $
 #
 #-------------------------------------------------------
 
@@ -8,7 +8,7 @@
 DESCRIPTION:
 ------------
 
-This is version 0.89 of Apache::AuthDBI and Apache::DBI.
+This is version 0.91 of Apache::AuthDBI and Apache::DBI.
 
 These modules are supposed to be used with the Apache server together with 
 an embedded perl interpreter like mod_perl. They provide support for basic 
@@ -32,11 +32,8 @@ modules.  It can be considered stable.
 
 RECENT CHANGES:
 ---------------
-
- - fix bug that occasionally made Apache::DBI connect several
-   times to the database even when DSN and attributes were the
-   same.
- - Updated links and such in the documentation
+ 
+  See the Changes file
 
 
 DEVELOPMENT:
@@ -305,15 +302,15 @@ do this:
 FURTHER INFORMATION:
 --------------------
 
-Apache   by Apache Group    news:comp.infosystems.www.servers.unix
-			    users-subscribe@httpd.apache.org
-                            http://httpd.apache.org/
-
-mod_perl by Doug MacEachern modperl-subscribe@apache.org
+mod_perl by Doug MacEachern modperl-subscribe@perl.apache.org
                             http://perl.apache.org/
 
 DBI      by Tim Bunce       dbi-users-subscribe@perl.org
                             http://dbi.perl.org/
+
+Apache   by Apache Group    news:comp.infosystems.www.servers.unix
+			    users-subscribe@httpd.apache.org
+                            http://httpd.apache.org/
 
 
 ---------------------------------------------------------------------------

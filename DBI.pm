@@ -1,7 +1,7 @@
 package Apache::DBI;
 use strict;
 
-# $Id: DBI.pm,v 1.10 2004/01/10 01:53:18 ask Exp $
+# $Id: DBI.pm,v 1.12 2004/02/18 00:18:50 ask Exp $
 
 BEGIN { eval { require Apache } }
 use DBI ();
@@ -9,7 +9,7 @@ use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.93';
+$Apache::DBI::VERSION = '0.94';
 
 # 1: report about new connect
 # 2: full debug output
@@ -72,7 +72,12 @@ sub connect {
     # the hash-reference differs between calls even in the same
     # process, so de-reference the hash-reference 
     if (3 == $#args and ref $args[3] eq "HASH") {
-      map { $Idx .= "$;$_=$args[3]->{$_}" } sort keys %{$args[3]};
+      # should we default to '__undef__' or something for undef values?
+      map { $Idx .= "$;$_=" . 
+	      (defined $args[3]->{$_} 
+	       ? $args[3]->{$_} 
+	       : '')
+	    } sort keys %{$args[3]};
     } elsif (3 == $#args) {
         pop @args;
     }
@@ -102,7 +107,7 @@ sub connect {
     $LastPingTime{$dsn} = 0 unless $LastPingTime{$dsn};
     my $now = time;
     my $needping = (($PingTimeOut{$dsn} == 0 or $PingTimeOut{$dsn} > 0)
-		    and $now - $LastPingTime{$dsn} >= $PingTimeOut{$dsn}
+		    and (($now - $LastPingTime{$dsn}) >= $PingTimeOut{$dsn})
 		   ) ? 1 : 0;
     print STDERR "$prefix need ping: ", $needping == 1 ? "yes" : "no", "\n" if $Apache::DBI::DEBUG > 1;
     $LastPingTime{$dsn} = $now;
@@ -274,21 +279,20 @@ which is cheap and safe or you can deactivate the usage of the ping method
 
 Here is generalized ping method, which can be added to the driver module:
 
-{   package DBD::xxx::db; # ====== DATABASE ======
-    use strict;
+   package DBD::xxx::db; # ====== DATABASE ======
+   use strict;
 
-    sub ping {
-        my($dbh) = @_;
-        my $ret = 0;
-        eval {
-            local $SIG{__DIE__}  = sub { return (0); };
-            local $SIG{__WARN__} = sub { return (0); };
-            # adapt the select statement to your database:
-            $ret = $dbh->do('select 1');
-        };
-        return ($@) ? 0 : $ret;
-    }
-}
+   sub ping {
+     my ($dbh) = @_;
+     my $ret = 0;
+     eval {
+       local $SIG{__DIE__}  = sub { return (0); };
+       local $SIG{__WARN__} = sub { return (0); };
+       # adapt the select statement to your database:
+       $ret = $dbh->do('select 1');
+     };
+     return ($@) ? 0 : $ret;
+   }
 
 Transactions: a standard DBI script will automatically perform a rollback
 whenever the script exits. In the case of persistent database connections,
@@ -361,7 +365,7 @@ and that mod_perl needs to be configured with the appropriate call-back hooks:
 =head1 MOD_PERL 2.0
 
 Apache::DBI version 0.90_02 and later might work under mod_perl 2.0.
-See the Changes file for more information.  Also beware that it has
+See the Changes file for more information.  Beware that it has
 only been tested very lightly.
 
 =head1 SEE ALSO
@@ -372,9 +376,12 @@ L<Apache>, L<mod_perl>, L<DBI>
 =head1 AUTHORS
 
 =item *
-Apache::DBI by Edmund Mergl (now supported and maintained by
-the modperl mailinglist, see the mod_perl documentation for
-instructions on how to subscribe).
+Ask Bjoern Hansen <ask@develooper.com> is currently packaging new releases.
+
+=item *
+Edmund Mergl was the original author of Apache::DBI.  It is now
+supported and maintained by the modperl mailinglist, see the mod_perl
+documentation for instructions on how to subscribe.
 
 =item *
 mod_perl by Doug MacEachern.

@@ -1,5 +1,10 @@
 Revision history for ApacheDBI.
 
+0.94	February 17, 2004
+	- Fix use of uninitialized value warnings when passed an
+	  "undef" attribute (thanks to Trevor Schellhorn)
+	- Minor POD cleanups
+
 0.93    January 10, 2004 
         - Always check $dbh->ping if the PingTimeOut is 0.
 	  (thanks to Dennis Ingram <Dennis.Ingram@tab.co.nz>)

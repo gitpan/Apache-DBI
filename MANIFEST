@@ -5,5 +5,5 @@ MANIFEST
 Makefile.PL
 README
 eg/startup.pl
-test.pl
 traces.txt
+t/10mysql.t

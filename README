@@ -1,6 +1,6 @@
 #-------------------------------------------------------
 #
-# $Id: README,v 1.2 2002/06/18 05:49:39 ask Exp $
+# $Id: README,v 1.3 2002/06/18 06:10:57 ask Exp $
 #
 #-------------------------------------------------------
 
@@ -37,6 +37,12 @@ RECENT CHANGES:
    times to the database even when DSN and attributes were the
    same.
  - Updated links and such in the documentation
+
+
+DEVELOPMENT:
+------------
+
+Apache::DBI is in CVS at perl.org; see http://cvs.perl.org/info?module=Apache/DBI
 
 
 EXAMPLES:

@@ -1,5 +1,12 @@
 Revision history for ApacheDBI.
 
+0.90_01 January 10, 2003
+        - Only call Apache::Status if Apache.pm is completely loaded
+        - Make Test::More a prerequisite so we can do real tests
+        - Make DBI.pm a prerequisite
+        - Add a simple, but real, test script.  Requires DBD::mysql
+          and a test database
+
 0.89 June 17, 2002
 	- fix bug that occasionally made Apache::DBI connect several
  	  times to the database even when DSN and attributes were the

@@ -4,7 +4,7 @@
 # PerlRequire /path/to/startup.pl
 
 # make sure we are in a sane environment.
-$ENV{GATEWAY_INTERFACE} =~ /^CGI-Perl/ or die "GATEWAY_INTERFACE not Perl!";
+$ENV{MOD_PERL} or die "GATEWAY_INTERFACE not Perl!";
 
 use Apache::Registry;
 use Apache::DBI;

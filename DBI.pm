@@ -4,17 +4,16 @@ use Apache ();
 use DBI ();
 use strict;
 
-# $Id: DBI.pm,v 1.2 2002/06/18 05:50:19 ask Exp $
+# $Id: DBI.pm,v 1.3 2003/01/10 08:18:02 ask Exp $
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.89';
+$Apache::DBI::VERSION = '0.90_01';
 
 # 1: report about new connect
 # 2: full debug output
 $Apache::DBI::DEBUG = 0;
 #DBI->trace(2);
-
 
 my %Connected;    # cache for database handles
 my @ChildConnect; # connections to be established when a new httpd child is created
@@ -196,7 +195,9 @@ Apache::Status->menu_item(
         return \@s;
    }
 
-) if ($INC{'Apache.pm'} and Apache->module('Apache::Status'));
+) if ($INC{'Apache.pm'} and Apache->can('module') and Apache->module('Apache::Status'));
+ 
+
 
 
 1;

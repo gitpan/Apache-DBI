@@ -1,9 +1,21 @@
 Revision history for ApacheDBI.
 
+0.93    January 10, 2004 
+        - Always check $dbh->ping if the PingTimeOut is 0.
+	  (thanks to Dennis Ingram <Dennis.Ingram@tab.co.nz>)
+        - Change $r->connection->user to $r->user to make AuthDBI work
+   	  with mod_perl 2.0 (thanks to Neil MacGregor <nmacgr@ca.ibm.com>
+	  and Brian McCauley <nobull@cpan.org>)
+	- removes the requirement for IPC::SysV to be installed if you
+	  don't actually use it. Remove support for mod_perls without
+	  push_handler support (Thanks to Brian again)
+        - improve tests (based on patch from Geoffrey Young
+  	  <geoff@modperlcookbook.org>; thanks Geoff!)
+
 0.92	August 11, 2003
         - Avoid use of uninitialized value warning under mod_perl 2.
-	- Make the tests compatible with DBI >= 1.33 (thanks to "Paul
- 	  MacAdam" <paul.macadam@intransa.com>)
+	- Make the tests compatible with DBI >= 1.33 (thanks to Paul
+ 	  MacAdam <paul.macadam@intransa.com>)
 
 0.91    February 17, 2003
         - Retagged and released the 0.90_02 beta as 0.91. No code
@@ -17,6 +29,7 @@ Revision history for ApacheDBI.
 
 0.90_01 January 10, 2003
         - Only call Apache::Status if Apache.pm is completely loaded
+	  (so you can load Apache::DBI outside the mod_perl environment)
         - Make Test::More a prerequisite so we can do real tests
         - Make DBI.pm a prerequisite
         - Add a simple, but real, test script.  Requires DBD::mysql

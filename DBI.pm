@@ -1,7 +1,7 @@
 package Apache::DBI;
 use strict;
 
-# $Id: DBI.pm,v 1.8 2003/08/11 17:13:08 ask Exp $
+# $Id: DBI.pm,v 1.10 2004/01/10 01:53:18 ask Exp $
 
 BEGIN { eval { require Apache } }
 use DBI ();
@@ -9,7 +9,7 @@ use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.92';
+$Apache::DBI::VERSION = '0.93';
 
 # 1: report about new connect
 # 2: full debug output
@@ -101,7 +101,9 @@ sub connect {
     $PingTimeOut{$dsn}  = 0 unless $PingTimeOut{$dsn};
     $LastPingTime{$dsn} = 0 unless $LastPingTime{$dsn};
     my $now = time;
-    my $needping = (($PingTimeOut{$dsn} == 0 or $PingTimeOut{$dsn} > 0) and $now - $LastPingTime{$dsn} > $PingTimeOut{$dsn}) ? 1 : 0;
+    my $needping = (($PingTimeOut{$dsn} == 0 or $PingTimeOut{$dsn} > 0)
+		    and $now - $LastPingTime{$dsn} >= $PingTimeOut{$dsn}
+		   ) ? 1 : 0;
     print STDERR "$prefix need ping: ", $needping == 1 ? "yes" : "no", "\n" if $Apache::DBI::DEBUG > 1;
     $LastPingTime{$dsn} = $now;
 
@@ -200,10 +202,9 @@ Apache::Status->menu_item(
         return \@s;
    }
 
-) if ($INC{'Apache.pm'} and Apache->can('module') and Apache->module('Apache::Status'));
- 
-
-
+) if ($INC{'Apache.pm'}                      # is Apache.pm loaded?
+      and Apache->can('module')               # really?
+      and Apache->module('Apache::Status'));  # Apache::Status too?
 
 1;
 

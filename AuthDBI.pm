@@ -1,20 +1,36 @@
 package Apache::AuthDBI;
 
-use Apache ();
-use Apache::Constants qw( OK AUTH_REQUIRED FORBIDDEN DECLINED SERVER_ERROR );
-use DBI ();
-use IPC::SysV qw( IPC_CREAT IPC_RMID S_IRUSR S_IWUSR );
-use strict;
-
-# $Id: AuthDBI.pm,v 1.3 2003/02/17 13:00:12 ask Exp $
-
-require_version DBI 1.00;
-
-$Apache::AuthDBI::VERSION = '0.89';
+$Apache::AuthDBI::VERSION = '0.93';
 
 # 1: report about cache miss
 # 2: full debug output
 $Apache::AuthDBI::DEBUG = 0;
+
+use constant MP2 => $mod_perl::VERSION >= 1.99;
+ 
+BEGIN {
+  my @constants = qw( OK AUTH_REQUIRED FORBIDDEN DECLINED SERVER_ERROR );
+  if (MP2) {
+    require Apache::Const;
+    import Apache::Const @constants;
+  }
+  else {
+    require Apache::Constants;
+    import Apache::Constants @constants;
+  }
+}
+
+use DBI ();
+use strict;
+
+sub push_handlers {
+  if ( MP2 ) {
+    Apache->server->push_handlers(@_);
+  }
+  else {
+    Apache->push_handlers(@_);
+  }
+}
 
 
 # configuration attributes, defaults will be overwritten with values from .htaccess.
@@ -119,6 +135,7 @@ my $release_lock = pack("sss", 0, -1, 0);
 sub initIPC {
     my $class   = shift;
     my $shmsize = shift;
+    require IPC::SysV;
 
     # make sure, this method is called only once
     return if $SHMKEY;
@@ -136,15 +153,11 @@ sub initIPC {
 
     # provide a handler which initializes the shared memory segment (first child)
     # or which increments the child counter. 
-    if(Apache->can('push_handlers')) {
-        Apache->push_handlers("PerlChildInitHandler" => \&childinit);
-    }
+    push_handlers( PerlChildInitHandler => \&childinit);
 
     # provide a handler which decrements the child count or which destroys the shared memory 
     # segment upon server shutdown, which is defined by the exit of the last child.
-    if(Apache->can('push_handlers')) {
-        Apache->push_handlers("PerlChildExitHandler" => \&childexit);
-    }
+    push_handlers( PerlChildExitHandler => \&childexit);
 }
 
 
@@ -174,7 +187,7 @@ sub authen {
     return $res if $res; # e.g. HTTP_UNAUTHORIZED
 
     # get username
-    my ($user_sent) = $r->connection->user;
+    my ($user_sent) = $r->user;
     print STDERR "$prefix user sent = >$user_sent<\n" if $Apache::AuthDBI::DEBUG > 1;
 
     # do we use shared memory for the global cache ?
@@ -237,14 +250,13 @@ sub authen {
         printf STDERR "$prefix passwd found in cache \n" if $Apache::AuthDBI::DEBUG > 1;
     } else { # password not cached or changed
         printf STDERR "$prefix passwd not found in cache \n" if $Apache::AuthDBI::DEBUG;
-
         # connect to database, use all data_sources until the connect succeeds
         my $j;
         for ($j = 0; $j <= $#data_sources; $j++) {
             last if ($dbh = DBI->connect($data_sources[$j], $usernames[$j], $passwords[$j]));
         }
         unless ($dbh) {
-            $r->log_reason("$prefix db connect error with data_source >$Attr->{data_source}<", $r->uri);
+            $r->log_reason("$prefix db connect error with data_source >$Attr->{data_source}<: $DBI::errstr", $r->uri);
             return SERVER_ERROR;
         }
 
@@ -393,9 +405,9 @@ sub authen {
     if ($CacheTime and $CleanupTime >= 0) {
         my $diff = time - substr($Cache, 0, index($Cache, "$;"));
         print STDERR "$prefix secs since last CleanupHandler: $diff, CleanupTime: $CleanupTime \n" if $Apache::AuthDBI::DEBUG > 1;
-        if ($diff > $CleanupTime and Apache->can('push_handlers')) {
+        if ($diff > $CleanupTime) {
             print STDERR "$prefix push PerlCleanupHandler \n" if $Apache::AuthDBI::DEBUG > 1;
-            Apache->push_handlers("PerlCleanupHandler", \&cleanup);
+            push_handlers( PerlCleanupHandler => \&cleanup);
         }
     }
 
@@ -426,7 +438,7 @@ sub authz {
     my ($group_result) = DECLINED;
 
     # get username
-    my ($user_sent) = $r->connection->user;
+    my ($user_sent) = $r->user;
     print STDERR "$prefix user sent = >$user_sent<\n" if $Apache::AuthDBI::DEBUG > 1 ;
 
     # here we could read the configuration, but we re-use the configuration from the authentication
@@ -646,13 +658,16 @@ sub authz {
 sub childinit {
     my $prefix = "$$ Apache::AuthDBI         PerlChildInitHandler";
     # create (or re-use existing) semaphore set
-    $SEMID = semget($SHMKEY, 1, IPC_CREAT|S_IRUSR|S_IWUSR);
+
+    $SEMID = semget($SHMKEY, 1,
+		    IPC::SysV::IPC_CREAT() | IPC::SysV::S_IRUSR() | IPC::SysV::S_IWUSR());
     if (!defined($SEMID)) {
       print STDERR "$prefix semget failed \n";
       return;
     }
     # create (or re-use existing) shared memory segment
-    $SHMID = shmget($SHMKEY, $SHMSIZE, IPC_CREAT|S_IRUSR|S_IWUSR);
+    $SHMID = shmget($SHMKEY, $SHMSIZE,
+		    IPC::SysV::IPC_CREAT() | IPC::SysV::S_IRUSR() | IPC::SysV::S_IWUSR());
     if (!defined($SHMID)) {
       print STDERR "$prefix shmget failed \n";
       return;
@@ -703,8 +718,8 @@ sub childexit {
     } else { # last child
         # remove shared memory segment and semaphore set
         print STDERR "$prefix child count = $child_count, remove shared memory $SHMID and semaphore $SEMID \n" if $Apache::AuthDBI::DEBUG > 1;
-        shmctl($SHMID,    IPC_RMID, 0) or print STDERR "$prefix shmctl failed \n";
-        semctl($SEMID, 0, IPC_RMID, 0) or print STDERR "$prefix semctl failed \n";
+        shmctl($SHMID,    IPC::SysV::IPC_RMID(), 0) or print STDERR "$prefix shmctl failed \n";
+        semctl($SEMID, 0, IPC::SysV::IPC_RMID(), 0) or print STDERR "$prefix semctl failed \n";
     }
     1;
 }

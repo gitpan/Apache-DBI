@@ -1,14 +1,12 @@
 #-------------------------------------------------------
-#
-# $Id: README,v 1.5 2003/04/18 10:33:16 ask Exp $
-#
+# $Id: README,v 1.6 2003/12/29 22:57:32 ask Exp $
 #-------------------------------------------------------
 
 
 DESCRIPTION:
 ------------
 
-This is version 0.91 of Apache::AuthDBI and Apache::DBI.
+This is version 0.93 of Apache::AuthDBI and Apache::DBI.
 
 These modules are supposed to be used with the Apache server together with 
 an embedded perl interpreter like mod_perl. They provide support for basic 
@@ -32,14 +30,17 @@ modules.  It can be considered stable.
 
 RECENT CHANGES:
 ---------------
- 
-  See the Changes file
+
+ - This or one of the next versions are likely to be renamed to 1.00!
+
+  See the Changes file for more detail
 
 
 DEVELOPMENT:
 ------------
 
-Apache::DBI is in CVS at perl.org; see http://cvs.perl.org/info?module=Apache/DBI
+Apache::DBI is in CVS at perl.org; see
+http://cvs.perl.org/info?module=Apache/DBI/
 
 
 EXAMPLES:

@@ -1,9 +1,16 @@
 use strict;
 use Test::More tests => 7;
+use DBI;
 
 BEGIN { 
   # trick DBI.pm into thinking we are running under mod_perl
-  $ENV{GATEWAY_INTERFACE} = 'CGI-Perl';  
+
+  if ($DBI::VERSION > 1.33) {
+    $ENV{MOD_PERL} = 'CGI-Perl';  
+  } 
+  else {  
+    $ENV{GATEWAY_INTERFACE} = 'CGI-Perl';  
+  }
   use_ok('Apache::DBI', 'load Apache::DBI') 
 };
 

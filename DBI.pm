@@ -1,7 +1,7 @@
 package Apache::DBI;
 use strict;
 
-# $Id: DBI.pm,v 1.6 2003/02/17 13:04:19 ask Exp $
+# $Id: DBI.pm,v 1.8 2003/08/11 17:13:08 ask Exp $
 
 BEGIN { eval { require Apache } }
 use DBI ();
@@ -9,7 +9,7 @@ use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.91';
+$Apache::DBI::VERSION = '0.92';
 
 # 1: report about new connect
 # 2: full debug output
@@ -81,7 +81,7 @@ sub connect {
     # won't be useful after ChildInit, since multiple processes trying to
     # work over the same database connection simultaneously will receive
     # unpredictable query results.
-    if ($Apache::ServerStarting == 1) {
+    if ($Apache::ServerStarting and $Apache::ServerStarting == 1) {
         print STDERR "$prefix skipping connection during server startup, read the docu !!\n" if $Apache::DBI::DEBUG > 1;
         return $drh->connect(@args);
     }

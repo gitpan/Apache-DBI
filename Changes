@@ -1,5 +1,10 @@
 Revision history for ApacheDBI.
 
+0.92	August 11, 2003
+        - Avoid use of uninitialized value warning under mod_perl 2.
+	- Make the tests compatible with DBI >= 1.33 (thanks to "Paul
+ 	  MacAdam" <paul.macadam@intransa.com>)
+
 0.91    February 17, 2003
         - Retagged and released the 0.90_02 beta as 0.91. No code
           changes.

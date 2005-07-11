@@ -4,16 +4,17 @@ use strict;
 # $Id: DBI.pm,v 1.12 2004/02/18 00:18:50 ask Exp $
 
 BEGIN { eval { require Apache } }
+BEGIN { eval { require mod_perl2; require Apache2::Module; } }
 use DBI ();
 use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.94';
+$Apache::DBI::VERSION = '0.98';
 
 # 1: report about new connect
 # 2: full debug output
-$Apache::DBI::DEBUG = 0;
+$Apache::DBI::DEBUG = 2;
 #DBI->trace(2);
 
 my %Connected;    # cache for database handles
@@ -31,11 +32,19 @@ my $Idx;          # key of %Connected and %Rollback.
 sub connect_on_init { 
     # provide a handler which creates all connections during server startup
 
-    # TODO - Should check for mod_perl 2 and do the right thing there
-    carp "Apache.pm was not loaded\n" and return unless $INC{'Apache.pm'};
-    if(!@ChildConnect and Apache->can('push_handlers')) {
-        Apache->push_handlers(PerlChildInitHandler => \&childinit);
-    }
+		if ($ENV{MOD_PERL_API_VERSION} == 2) {
+			if (!@ChildConnect) {
+				require Apache2::ServerUtil;
+				my $s = Apache2::ServerUtil->server;
+				$s->push_handlers(PerlChildInitHandler => \&childinit);
+			}
+		}
+		else {
+   		carp "Apache.pm was not loaded\n" and return unless $INC{'Apache.pm'};
+   		if (!@ChildConnect and Apache->can('push_handlers')) {
+     	  Apache->push_handlers(PerlChildInitHandler => \&childinit);
+   		}
+		}
     # store connections
     push @ChildConnect, [@_];
 }
@@ -86,17 +95,33 @@ sub connect {
     # won't be useful after ChildInit, since multiple processes trying to
     # work over the same database connection simultaneously will receive
     # unpredictable query results.
-    if ($Apache::ServerStarting and $Apache::ServerStarting == 1) {
-        print STDERR "$prefix skipping connection during server startup, read the docu !!\n" if $Apache::DBI::DEBUG > 1;
-        return $drh->connect(@args);
+
+    ## See: http://perl.apache.org/docs/2.0/user/porting/compat.html#C__Apache__Server__Starting__and_C__Apache__Server__ReStarting_
+    if (exists $ENV{MOD_PERL_API_VERSION} && $ENV{MOD_PERL_API_VERSION} == 2) {
+        require Apache2::ServerUtil;
+        if (Apache2::ServerUtil::restart_count() == 1) {
+          print STDERR "$prefix skipping connection during server startup, read the docu !!\n" if $Apache::DBI::DEBUG > 1;
+        } 
+    }
+    else {
+        if ($Apache::ServerStarting and $Apache::ServerStarting == 1) {
+            print STDERR "$prefix skipping connection during server startup, read the docu !!\n" if $Apache::DBI::DEBUG > 1;
+            return $drh->connect(@args);
+        }   
     }
 
     # this PerlCleanupHandler is supposed to initiate a rollback after the script has finished if AutoCommit is off.
     my $needCleanup = ($Idx =~ /AutoCommit[^\d]+0/) ? 1 : 0;
-    # TODO - Fix mod_perl 2.0 here
     if(!$Rollback{$Idx} and $needCleanup and Apache->can('push_handlers')) {
         print STDERR "$prefix push PerlCleanupHandler \n" if $Apache::DBI::DEBUG > 1;
-        Apache->push_handlers("PerlCleanupHandler", \&cleanup);
+				if ($ENV{MOD_PERL_API_VERSION} == 2) {
+					require Apache2::ServerUtil;
+					my $s = Apache2::ServerUtil->server;
+					$s->push_handlers("PerlCleanupHandler", \&cleanup);
+				}
+				else {
+        	Apache->push_handlers("PerlCleanupHandler", \&cleanup);
+				}
         # make sure, that the rollback is called only once for every 
         # request, even if the script calls connect more than once
         $Rollback{$Idx} = 1;
@@ -193,9 +218,8 @@ sub all_handlers {
 
 
 # prepare menu item for Apache::Status
-
-Apache::Status->menu_item(
-
+if (exists $ENV{MOD_PERL_API_VERSION} && $ENV{MOD_PERL_API_VERSION} == 2) {
+	Apache2::Status->menu_item(
     'DBI' => 'DBI connections',
     sub {
         my($r, $q) = @_;
@@ -206,10 +230,25 @@ Apache::Status->menu_item(
         push @s, '</TABLE>';
         return \@s;
    }
+	) if Apache2::Module::loaded('Apache2::Status');
+}
+else {
+	Apache::Status->menu_item(
+		'DBI' => 'DBI connections',
+		sub {
+        my($r, $q) = @_;
+        my(@s) = qw(<TABLE><TR><TD>Datasource</TD><TD>Username</TD></TR>);
+        for (keys %Connected) {
+            push @s, '<TR><TD>', join('</TD><TD>', (split($;, $_))[0,1]), "</TD></TR>\n";
+        }
+        push @s, '</TABLE>';
+        return \@s;
+   }
 
-) if ($INC{'Apache.pm'}                      # is Apache.pm loaded?
+	) if ($INC{'Apache.pm'}                      # is Apache.pm loaded?
       and Apache->can('module')               # really?
       and Apache->module('Apache::Status'));  # Apache::Status too?
+}
 
 1;
 
@@ -309,13 +348,13 @@ end of every request. Note, that this CleanupHandler will only be used, if
 the initial data_source sets AutoCommit = 0. It will not be used, if AutoCommit 
 will be turned off, after the connect has been done. 
 
-This module plugs in a menu item for Apache::Status. The menu lists the 
-current database connections. It should be considered incomplete because of 
-the limitations explained above. It shows the current database connections 
-for one specific server, the one which happens to serve the current request. 
-Other servers might have other database connections. The Apache::Status module 
-has to be loaded before the Apache::DBI module !
-
+This module plugs in a menu item for Apache::Status or Apache2::Status. 
+The menu lists the current database connections. It should be considered 
+incomplete because of the limitations explained above. It shows the current 
+database connections for one specific server, the one which happens to serve the 
+current request.  Other servers might have other database connections. 
+The Apache::Status/Apache2::Status module has to be loaded before the 
+Apache::DBI module !
 
 =head1 CONFIGURATION
 
@@ -327,7 +366,7 @@ Add the following line to your httpd.conf or startup.pl:
 It is important, to load this module before any other modules using DBI ! 
 
 A common usage is to load the module in a startup file via the PerlRequire 
-directive. See eg/startup.pl for an example. 
+directive. See eg/startup.pl and eg/startup2.pl for examples.
 
 There are two configurations which are server-specific and which can be done 
 upon server startup: 
@@ -346,8 +385,8 @@ the validation of the database handle. This can be used for drivers, which
 do not implement the ping-method. Setting the timeout > 0 will ping the 
 database only if the last access was more than timeout seconds before. 
 
-For the menu item 'DBI connections' you need to call Apache::Status BEFORE 
-Apache::DBI ! For an example of the configuration order see startup.pl. 
+For the menu item 'DBI connections' you need to call Apache::Status/Apache2::Status
+BEFORE Apache::DBI ! For an example of the configuration order see startup.pl. 
 
 To enable debugging the variable $Apache::DBI::DEBUG must be set. This 
 can either be done in startup.pl or in the user script. Setting the variable 
@@ -364,7 +403,7 @@ and that mod_perl needs to be configured with the appropriate call-back hooks:
 
 =head1 MOD_PERL 2.0
 
-Apache::DBI version 0.90_02 and later might work under mod_perl 2.0.
+Apache::DBI version 0.96 and should work under mod_perl 2.0 RC5 and later.
 See the Changes file for more information.  Beware that it has
 only been tested very lightly.
 

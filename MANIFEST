@@ -4,6 +4,10 @@ DBI.pm
 MANIFEST
 Makefile.PL
 README
+eg/mod_perl.conf
 eg/startup.pl
+eg/startup2.pl
+eg/startup3.pl
 traces.txt
 t/10mysql.t
+META.yml                                 Module meta-data (added by MakeMaker)

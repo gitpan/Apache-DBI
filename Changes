@@ -1,5 +1,43 @@
 Revision history for ApacheDBI.
 
+0.98	06/30/2005
+	- Fix MP2 issue with $Apache::Server::Starting
+	Reported by Vincent Moneymaker vbmonymaker@hotmail.com
+	[Philip M. Gollucci <pgollucci@p6m7g8.com>
+
+0.97	06/27/2005
+	- Fix minor use strict bug in make test
+	[Philip M. Gollucci <pgollucci@p6m7g8.com>
+
+        - Fixed a bug in salt calculation
+	  Kevin A. McGrail (ThoughtWorthy Media, Inc.) 
+
+        - Added Auth_DBI_encryption_method configuration.  Supports md5 hex, sha1 hex & crypt and will support fallback.  
+          	Other encryption methods can be added by modifying the subroutine get_passwds_to_check
+	  Kevin A. McGrail (ThoughtWorthy Media, Inc.) 
+
+	- MP2/MP1 Constants compatability fixes in AuthDBI
+	  Kevin A. McGrail (ThoughtWorthy Media, Inc.) 
+
+        - Added a feature 'Apache::AuthDBI->setProjID(1)' to set a Shared
+          	Memory Project ID when using the shared memory caching.
+	  Kevin A. McGrail (ThoughtWorthy Media, Inc.) 
+
+        - Fixed an MP2 problem when Debug is set to 2 changing is_main() to main() call
+	  Kevin A. McGrail (ThoughtWorthy Media, Inc.) 
+
+        - Added a few more Debug statements including the Semaphore ID in hex to use ipcs
+	  Kevin A. McGrail (ThoughtWorthy Media, Inc.) 
+
+0.96	04/19/2005
+	- Account for the recent mod_perl2 API renaming
+	[Philip M .Gollucci <pgollucci@p6m7g8.com>]
+
+0.95
+	- Avoid "The object isn't defined" error during "make test" if
+	  we can't connect to the test database.
+
+
 0.94	February 17, 2004
 	- Fix use of uninitialized value warnings when passed an
 	  "undef" attribute (thanks to Trevor Schellhorn)

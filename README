@@ -1,12 +1,7 @@
-#-------------------------------------------------------
-# $Id: README,v 1.6 2003/12/29 22:57:32 ask Exp $
-#-------------------------------------------------------
-
-
 DESCRIPTION:
 ------------
 
-This is version 0.93 of Apache::AuthDBI and Apache::DBI.
+This is version 0.98 of Apache::AuthDBI and Apache::DBI.
 
 These modules are supposed to be used with the Apache server together with 
 an embedded perl interpreter like mod_perl. They provide support for basic 
@@ -231,13 +226,15 @@ License or the Artistic License, as specified in the Perl README file.
 PREREQUISITES:
 --------------
 
-Configure mod_perl with: 
+Configure mod_perl1 with: 
 
   perl Makefile.PL PERL_CHILD_INIT=1 PERL_AUTHEN=1 PERL_AUTHZ=1 
                    PERL_CLEANUP=1 PERL_STACKED_HANDLERS=1
 
 If there are no security reasons to limit the API, just use EVERYTHING=1. 
 
+mod_perl2 RC5 and higher should work with Apache::DBI 0.96 and higher.
+No specific switches must be passed to mod_perl2's Makefile.PL.
 
 INSTALLATION:
 -------------

@@ -1,16 +1,12 @@
-#-------------------------------------------------------
-#
-# $Id: Makefile.PL,v 1.2 2003/01/10 08:18:02 ask Exp $
-#
-#-------------------------------------------------------
-
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
     'NAME'         => 'Apache::DBI',
     'VERSION_FROM' => 'DBI.pm',
-    'PREREQ_PM'    => { 'Test::More' => 0,    # without tests we don't know fun.
-			'DBI'        => 1.00, # no DBI can never be any fun.
+    'PREREQ_PM'    => { 'Test::More' => 0,      # without tests we don't know fun.
+			'DBI'        => 1.00,   # no DBI can never be any fun.
+                        'Digest::SHA1' => 2.01, # SHA1 Digest for alternate encryption method fun.
+                        'Digest::MD5'  => 2.20  # MD5 Digest for even more fun.
 		      },
 );
 

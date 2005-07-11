@@ -1,18 +1,18 @@
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '0.93';
+$Apache::AuthDBI::VERSION = '0.98';
 
 # 1: report about cache miss
 # 2: full debug output
 $Apache::AuthDBI::DEBUG = 0;
 
-use constant MP2 => $mod_perl::VERSION >= 1.99;
+use constant MP2 => $ENV{MOD_PERL_API_VERSION} == 2 ? 1 : 0;
  
 BEGIN {
   my @constants = qw( OK AUTH_REQUIRED FORBIDDEN DECLINED SERVER_ERROR );
   if (MP2) {
-    require Apache::Const;
-    import Apache::Const @constants;
+    require Apache2::Const;
+    import Apache2::Const @constants;
   }
   else {
     require Apache::Constants;
@@ -21,11 +21,15 @@ BEGIN {
 }
 
 use DBI ();
+use Digest::SHA1;
+use Digest::MD5;
 use strict;
 
 sub push_handlers {
   if ( MP2 ) {
-    Apache->server->push_handlers(@_);
+		require Apache2::ServerUtil;
+		my $s = Apache2::ServerUtil->server;
+		$s->push_handlers(@_);
   }
   else {
     Apache->push_handlers(@_);
@@ -52,6 +56,7 @@ my %Config = (
     'Auth_DBI_nopasswd'         => 'off',
     'Auth_DBI_encrypted'        => 'on',
     'Auth_DBI_encryption_salt'  => 'password',
+    'Auth_DBI_encryption_method'=> 'sha1hex/md5/crypt',     #Using Two (or more) Methods Will Allow for Fallback to older Methods
     'Auth_DBI_uidcasesensitive' => 'on',
     'Auth_DBI_pwdcasesensitive' => 'on',
     'Auth_DBI_placeholder'      => 'off',
@@ -121,6 +126,21 @@ my $SHMKEY  =     0; # unique key for shared memory segment and semaphore set
 my $SEMID   =     0; # id of semaphore set
 my $SHMID   =     0; # id of shared memory segment
 my $SHMSIZE = 50000; # default size of shared memory segment
+my $SHMPROJID =   1; # default project id for shared memory segment
+
+# Supposed to be called in a startup script.
+# Sets SHMPROJID to a user defined value
+sub setProjID {
+    my $class        = shift;
+    my $shmprojid = shift;
+
+    #Set ProjID prior to calling initIPC!
+    return if $SHMKEY;
+
+    # sanity check - Must be numeric and less than or equal to 255
+    $SHMPROJID = int($shmprojid) if ($shmprojid =~ /\d{1,3}/ && $shmprojid <= 255 && $shmprojid > 0);
+}
+
 
 # shortcuts for semaphores
 my $obtain_lock  = pack("sss", 0,  0, 0) . pack("sss", 0, 1, 0);
@@ -143,10 +163,10 @@ sub initIPC {
     # ensure minimum size of shared memory segment
     $SHMSIZE = $shmsize if $shmsize >= 500;
 
-    # generate unique key based on path of AuthDBI.pm
+    # generate unique key based on path of AuthDBI.pm + SHMPROJID
     foreach my $file (keys %INC) {
         if ($file eq 'Apache/AuthDBI.pm') {
-            $SHMKEY = IPC::SysV::ftok($INC{$file}, 1);
+            $SHMKEY = IPC::SysV::ftok($INC{$file}, $SHMPROJID);
             last;
         }
     }
@@ -172,12 +192,17 @@ sub authen {
 
     if ($Apache::AuthDBI::DEBUG > 1) {
         my ($type) = '';
-        $type .= 'initial ' if $r->is_initial_req;
-        $type .= 'main'     if $r->is_main;
+        if (MP2) {
+          $type .= 'initial ' if $r->is_initial_req();
+          $type .= 'main'     if $r->main();
+        } else {
+          $type .= 'initial ' if $r->is_initial_req;
+          $type .= 'main'     if $r->is_main;
+        }
         print STDERR "==========\n$prefix request type = >$type< \n";
     }
 
-    return OK unless $r->is_initial_req; # only the first internal request
+    return MP2 ? Apache2::Const::OK() : Apache::Constants::OK() unless $r->is_initial_req; # only the first internal request
 
     print STDERR "REQUEST:\n", $r->as_string if $Apache::AuthDBI::DEBUG > 1;
 
@@ -214,8 +239,8 @@ sub authen {
 
     # if not configured decline
     unless ($Attr->{pwd_table} && $Attr->{uid_field} && $Attr->{pwd_field}) {
-        printf STDERR "$prefix not configured, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
-        return DECLINED;
+        print STDERR "$prefix not configured, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
+        return MP2 ? Apache2::Const::DECLINED() : Apache::Constants::DECLINED();
     }
 
     # do we want Windows-like case-insensitivity?
@@ -224,11 +249,10 @@ sub authen {
 
     # check whether the user is cached but consider that the password possibly has changed
     my $passwd = '';
-    my $salt   = '';
     if ($CacheTime) { # do we use the cache ?
         if ($SHMID) { # do we keep the cache in shared memory ?
             semop($SEMID, $obtain_lock) or print STDERR "$prefix semop failed \n";
-            shmread($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmread failed \n";
+            shmread($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmread failed \n";
             substr($Cache, index($Cache, "\0")) = '';
             semop($SEMID, $release_lock) or print STDERR "$prefix semop failed \n";
         }
@@ -238,18 +262,26 @@ sub authen {
             $last_access   = $1;
             $passwd_cached = $2;
             $groups_cached = $3;
-            printf STDERR "$prefix cache: found >$ID< >$last_access< >$passwd_cached< \n" if $Apache::AuthDBI::DEBUG > 1;
-            $salt = $Attr->{encryption_salt} eq 'userid' ? $user_sent : $passwd_cached;
-            my $passwd_to_check = $Attr->{encrypted} eq 'on' ? crypt($passwd_sent, $salt) : $passwd_sent; 
-            # match cached password with password sent 
-            $passwd = $passwd_cached if $passwd_to_check eq $passwd_cached;
+            print STDERR "$prefix cache: found >$ID< >$last_access< >$passwd_cached< \n" if $Apache::AuthDBI::DEBUG > 1;
+            my (@passwds_to_check, $passwd_to_check);
+            
+            @passwds_to_check = &get_passwds_to_check($Attr, user_sent=>$user_sent, passwd_sent=>$passwd_sent, password=>$passwd_cached);
+            
+            print STDERR "$prefix ". scalar(@passwds_to_check) . " passwords to check\n" if $Apache::AuthDBI::DEBUG > 1;;
+            foreach $passwd_to_check(@passwds_to_check) {
+              # match cached password with password sent 
+              $passwd = $passwd_cached if $passwd_to_check eq $passwd_cached;
+              if ($passwd) {
+                last;
+              }
+            }
         }
     }
 
     if ($passwd) { # found in cache
-        printf STDERR "$prefix passwd found in cache \n" if $Apache::AuthDBI::DEBUG > 1;
+        print STDERR "$prefix passwd found in cache \n" if $Apache::AuthDBI::DEBUG > 1;
     } else { # password not cached or changed
-        printf STDERR "$prefix passwd not found in cache \n" if $Apache::AuthDBI::DEBUG;
+        print STDERR "$prefix passwd not found in cache \n" if $Apache::AuthDBI::DEBUG;
         # connect to database, use all data_sources until the connect succeeds
         my $j;
         for ($j = 0; $j <= $#data_sources; $j++) {
@@ -257,7 +289,7 @@ sub authen {
         }
         unless ($dbh) {
             $r->log_reason("$prefix db connect error with data_source >$Attr->{data_source}<: $DBI::errstr", $r->uri);
-            return SERVER_ERROR;
+            return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
         }
 
         # generate statement
@@ -275,7 +307,7 @@ sub authen {
         unless ($sth = $dbh->prepare($statement)) {
             $r->log_reason("$prefix can not prepare statement: $DBI::errstr", $r->uri);
             $dbh->disconnect;
-            return SERVER_ERROR;
+            return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
         }
 
         # execute statement
@@ -283,7 +315,7 @@ sub authen {
         unless ($rv = ($Attr->{placeholder} eq "on") ? $sth->execute($user_sent) : $sth->execute) {
             $r->log_reason("$prefix can not execute statement: $DBI::errstr", $r->uri);
             $dbh->disconnect;
-            return SERVER_ERROR;
+            return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
         }
 
         # fetch result
@@ -299,7 +331,7 @@ sub authen {
 
         if ($sth->err) {
             $dbh->disconnect;
-            return SERVER_ERROR;
+            return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
         }
         $sth->finish;
 
@@ -316,41 +348,46 @@ sub authen {
         if ($Attr->{authoritative} eq 'on') {
             $r->log_reason("$prefix password for user $user_sent not found", $r->uri);
             $r->note_basic_auth_failure;
-            return AUTH_REQUIRED;
+            return MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED();
         } else {
             # else pass control to the next authentication module
-            return DECLINED;
+            return MP2 ? Apache2::Const::DECLINED() : Apache::Constants::DECLINED();
         }
     }
 
     # allow any password if nopasswd = on and the retrieved password is empty
     if ($Attr->{nopasswd} eq 'on' && !$passwd) {
-        return OK;
+        return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
     }
 
     # if nopasswd is off, reject user
     unless ($passwd_sent && $passwd) {
         $r->log_reason("$prefix user $user_sent: empty password(s) rejected", $r->uri);
         $r->note_basic_auth_failure;
-        return AUTH_REQUIRED;
+        return MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED();
     }
 
     # compare passwords
     my $found = 0;
     my $password;
     foreach $password (split(/$;/, $passwd)) {
-        # compare the two passwords possibly crypting the password if needed
-        $salt = $Attr->{encryption_salt} eq 'userid' ? $user_sent : $password;
-        my $passwd_to_check = $Attr->{encrypted} eq 'on' ? crypt($passwd_sent, $password) : $passwd_sent; 
-        if ($passwd_to_check eq $password) {
+        # compare all the passwords using as many encryption methods in fallback as needed
+        my (@passwds_to_check, $passwd_to_check);
+
+        @passwds_to_check = &get_passwds_to_check($Attr, user_sent=>$user_sent, passwd_sent=>$passwd_sent, password=>$password);
+
+        print STDERR "$prefix ". scalar(@passwds_to_check) . " passwords to check\n" if $Apache::AuthDBI::DEBUG > 1;
+        foreach $passwd_to_check(@passwds_to_check) {
+          print STDERR "$prefix user $user_sent: Password after Preparation >$passwd_to_check< - trying for a match with >$password< \n" if $Apache::AuthDBI::DEBUG > 1;
+          if ($passwd_to_check eq $password) {
             $found = 1;
             $r->subprocess_env(REMOTE_PASSWORD => $password);
-            print STDERR "$prefix user $user_sent: password match for >$password< \n" if $Apache::AuthDBI::DEBUG > 1;
+            print STDERR "$prefix user $user_sent: Password from Web Server >$passwd_sent< - Password after Preparation >$passwd_to_check< - password match for >$password< \n" if $Apache::AuthDBI::DEBUG > 1;
             # update timestamp and cache userid/password if CacheTime is configured
             if ($CacheTime) { # do we use the cache ?
                 if ($SHMID) { # do we keep the cache in shared memory ?
                     semop($SEMID, $obtain_lock) or print STDERR "$prefix semop failed \n";
-                    shmread($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmread failed \n";
+                    shmread($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmread failed \n";
                     substr($Cache, index($Cache, "\0")) = '';
                 }
                 # update timestamp and password or append new record
@@ -360,17 +397,23 @@ sub authen {
                 } else {
                 }
                 if ($SHMID) { # write cache to shared memory
-                    shmwrite($SHMID, $Cache, 0, $SHMSIZE)  or printf STDERR "$prefix shmwrite failed \n";
+                    shmwrite($SHMID, $Cache, 0, $SHMSIZE)  or print STDERR "$prefix shmwrite failed \n";
                     semop($SEMID, $release_lock) or print STDERR "$prefix semop failed \n";
                 }
             }
+            last;
+          }
+        }
+
+        #if the passwd matched (encrypted or otherwise), don't check the myriad other passwords that may or may not exist
+        if ($found > 0) {
             last;
         }
     }
     unless ($found) {
         $r->log_reason("$prefix user $user_sent: password mismatch", $r->uri);
         $r->note_basic_auth_failure;
-        return AUTH_REQUIRED;
+        return MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED();
     }
 
     # logging option
@@ -385,7 +428,7 @@ sub authen {
             }
             unless ($connect) {
                 $r->log_reason("$prefix db connect error with $Attr->{data_source}", $r->uri);
-                return SERVER_ERROR;
+                return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
             }
         }
         my $user_sent_quoted = $dbh->quote($user_sent);
@@ -394,7 +437,7 @@ sub authen {
         unless ($dbh->do($statement)) {
             $r->log_reason("$prefix can not do statement: $DBI::errstr", $r->uri);
             $dbh->disconnect;
-            return SERVER_ERROR;
+            return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
         }
         $dbh->disconnect;
     }
@@ -411,13 +454,47 @@ sub authen {
         }
     }
 
-    printf STDERR "$prefix return OK\n" if $Apache::AuthDBI::DEBUG > 1;
-    return OK;
+    print STDERR "$prefix return OK\n" if $Apache::AuthDBI::DEBUG > 1;
+    return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
 }
 
+#Encrypts a password in all supported/requested methods and passes back array for comparison
+sub get_passwds_to_check {
+  my ($Attr, %params) = @_;
+
+  my ($prefix) = "$$ Apache::AuthDBI::get_passwds_to_check ";
+
+  my ($salt, @passwds_to_check);
+
+  if ($Attr->{encrypted} eq 'on') {
+    #SHA1
+    if ($Attr->{encryption_method} =~ /(^|\/)sha1hex($|\/)/i) {
+      push (@passwds_to_check, &SHA1_digest(text=>$params{'passwd_sent'}, format=>'hex'));
+    }
+    #MD5
+    if ($Attr->{encryption_method} =~ /(^|\/)md5hex($|\/)/i) {
+      push (@passwds_to_check, &MD5_digest(text=>$params{'passwd_sent'}, format=>'hex'));
+    }
+    #CRYPT
+    if ($Attr->{encryption_method} =~ /(^|\/)crypt($|\/)/i) {
+      $salt = $Attr->{encryption_salt} eq 'userid' ? $params{'user_sent'} : $params{'password'};
+      #Bug Fix in v0.94 (marked as 0.93 in file.  salt was NOT being sent to crypt) - KAM - 06-16-2005
+      push (@passwds_to_check, crypt($params{'passwd_sent'}, $salt));
+    }
+
+    #WE DIDN'T GET ANY PASSWORDS TO CHECK.  MUST BE A PROBLEM
+    if (scalar(@passwds_to_check) < 1) {
+      print STDERR "$prefix Error: No Valid Encryption Method Specified.\n" if $Apache::AuthDBI::DEBUG > 1;
+    }
+  } else {
+    #IF NO ENCRYPTION, JUST PUSH THE CLEARTEXT PASS
+    push (@passwds_to_check, $params{'passwd_sent'});
+  }
+
+  return (@passwds_to_check);
+}
 
 # authorization handler, it is called immediately after the authentication
-
 sub authz {
 
     my ($r) = @_;
@@ -427,15 +504,22 @@ sub authz {
 
     if ($Apache::AuthDBI::DEBUG > 1) {
         my ($type) = '';
-        $type .= 'initial ' if $r->is_initial_req;
-        $type .= 'main'     if $r->is_main;
+        if (MP2) {
+          $type .= 'initial ' if $r->is_initial_req();
+          $type .= 'main'     if $r->main();
+        } else {
+          $type .= 'initial ' if $r->is_initial_req;
+          $type .= 'main'     if $r->is_main;
+        }
         print STDERR "==========\n$prefix request type = >$type< \n";
     }
 
-    return OK unless $r->is_initial_req; # only the first internal request
+    unless ($r->is_initial_req) {
+      return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
+    }; # only the first internal request
 
-    my ($user_result)  = DECLINED;
-    my ($group_result) = DECLINED;
+    my ($user_result)  = MP2 ? Apache2::Const::DECLINED() : Apache::Constants::DECLINED();
+    my ($group_result) = MP2 ? Apache2::Const::DECLINED() : Apache::Constants::DECLINED();
 
     # get username
     my ($user_sent) = $r->user;
@@ -451,26 +535,33 @@ sub authz {
 
     # if not configured decline
     unless ($Attr->{pwd_table} && $Attr->{uid_field} && $Attr->{grp_field}) {
-        printf STDERR "$prefix not configured, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
-        return DECLINED;
+        print STDERR "$prefix not configured, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
+        return MP2 ? Apache2::Const::DECLINED() : Apache::Constants::DECLINED();
     }
 
     # do we want Windows-like case-insensitivity?
     $user_sent = lc($user_sent) if $Attr->{uidcasesensitive} eq "off";
 
     # select code to return if authorization is denied:
-    my $authz_denied= $Attr->{expeditive} eq 'on' ? FORBIDDEN : AUTH_REQUIRED;
+    my ($authz_denied);
+    if (MP2) {
+      $authz_denied = $Attr->{expeditive} eq 'on' ? Apache2::Const::FORBIDDEN() : Apache2::Const::AUTH_REQUIRED();
+    } else {
+      $authz_denied = $Attr->{expeditive} eq 'on' ? Apache::Constants::FORBIDDEN() : Apache::Constants::AUTH_REQUIRED();
+    }
 
     # check if requirements exists
     my ($ary_ref) = $r->requires;
     unless ($ary_ref) {
         if ($Attr->{authoritative} eq 'on') {
             $r->log_reason("user $user_sent denied, no access rules specified (DBI-Authoritative)", $r->uri);
-            $r->note_basic_auth_failure if $authz_denied == AUTH_REQUIRED;
+            if ($authz_denied == MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED()) {
+              $r->note_basic_auth_failure;
+            }
             return $authz_denied;
         }
-        printf STDERR "$prefix no requirements and not authoritative, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
-        return DECLINED;
+        print STDERR "$prefix no requirements and not authoritative, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
+        return MP2 ? Apache2::Const::DECLINED() : Apache::Constants::DECLINED();
     }
 
     # iterate over all requirement directives and store them according to their type (valid-user, user, group)
@@ -495,26 +586,26 @@ sub authz {
 
     # check for valid-user
     if ($valid_user) {
-        $user_result = OK;
+        $user_result = MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
         print STDERR "$prefix user_result = OK: valid-user\n" if $Apache::AuthDBI::DEBUG > 1;
     }
 
     # check for users
-    if ($user_result != OK && $user_requirements) {
-        $user_result = AUTH_REQUIRED;
+    if (($user_result != MP2 ? Apache2::Const::OK() : Apache::Constants::OK()) && $user_requirements) {
+        $user_result = MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED();
         my $user_required;
         foreach $user_required (split /\s+/, $user_requirements) {
             if ($user_required eq $user_sent) {
                 print STDERR "$prefix user_result = OK for $user_required \n" if $Apache::AuthDBI::DEBUG > 1;
-                $user_result = OK;
+                $user_result = MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
                 last;
            }
         }
     }
 
     # check for groups
-    if ($user_result != OK && $group_requirements) {
-        $group_result = AUTH_REQUIRED;
+    if (($user_result != MP2 ? Apache2::Const::OK() : Apache::Constants::OK()) && $group_requirements) {
+        $group_result = MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED();
         my ($group, $group_required);
 
         # check whether the user is cached but consider that the group possibly has changed
@@ -527,7 +618,7 @@ sub authz {
                 $last_access   = $1;
                 $passwd_cached = $2;
                 $groups_cached = $3;
-                printf STDERR "$prefix cache: found >$ID< >$last_access< >$groups_cached< \n" if $Apache::AuthDBI::DEBUG > 1;
+                print STDERR "$prefix cache: found >$ID< >$last_access< >$groups_cached< \n" if $Apache::AuthDBI::DEBUG > 1;
                 REQUIRE_1: foreach $group_required (split /\s+/, $group_requirements) {
                     foreach $group (split(/,/, $groups_cached)) {
                         if ($group_required eq $group) {
@@ -540,9 +631,9 @@ sub authz {
         }
 
         if ($groups) { # found in cache
-            printf STDERR "$prefix groups found in cache \n" if $Apache::AuthDBI::DEBUG > 1;
+            print STDERR "$prefix groups found in cache \n" if $Apache::AuthDBI::DEBUG > 1;
         } else { # groups not cached or changed
-            printf STDERR "$prefix groups not found in cache \n" if $Apache::AuthDBI::DEBUG;
+            print STDERR "$prefix groups not found in cache \n" if $Apache::AuthDBI::DEBUG;
 
             # connect to database, use all data_sources until the connect succeeds
             my ($j, $connect);
@@ -554,7 +645,7 @@ sub authz {
             }
             unless ($connect) {
                 $r->log_reason("$prefix db connect error with $Attr->{data_source}", $r->uri);
-                return SERVER_ERROR;
+                return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
             }
 
             # generate statement
@@ -572,7 +663,7 @@ sub authz {
             unless ($sth = $dbh->prepare($statement)) {
                 $r->log_reason("can not prepare statement: $DBI::errstr", $r->uri);
                 $dbh->disconnect;
-                return SERVER_ERROR;
+                return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
             }
 
             # execute statement
@@ -580,7 +671,7 @@ sub authz {
             unless ($rv = ($Attr->{placeholder} eq "on") ? $sth->execute($user_sent) : $sth->execute) {
                 $r->log_reason("can not execute statement: $DBI::errstr", $r->uri);
                 $dbh->disconnect;
-                return SERVER_ERROR;
+                return MP2 ? Apache2::Const::SERVER_ERROR() : Apache::Constants::SERVER_ERROR();
             }
 
             # fetch result and build a group-list
@@ -604,14 +695,14 @@ sub authz {
             foreach $group (split(/,/, $groups)) {
                 # check group
                 if ($group_required eq $group) {
-                    $group_result = OK;
+                    $group_result = MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
                     $r->subprocess_env(REMOTE_GROUP => $group);
                     print STDERR "$prefix user $user_sent: group_result = OK for >$group< \n" if $Apache::AuthDBI::DEBUG > 1;
                     # update timestamp and cache userid/groups if CacheTime is configured
                     if ($CacheTime) { # do we use the cache ?
                         if ($SHMID) { # do we keep the cache in shared memory ?
                             semop($SEMID, $obtain_lock) or print STDERR "$prefix semop failed \n";
-                            shmread($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmread failed \n";
+                            shmread($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmread failed \n";
                             substr($Cache, index($Cache, "\0")) = '';
                         }
                         # update timestamp and groups
@@ -619,7 +710,7 @@ sub authz {
                         # entry must exists from authentication
 	        	$Cache =~ s/$ID$;\d+$;(.*)$;.*\n/$ID$;$now$;$1$;$groups\n/;
                         if ($SHMID) { # write cache to shared memory
-                            shmwrite($SHMID, $Cache, 0, $SHMSIZE)  or printf STDERR "$prefix shmwrite failed \n";
+                            shmwrite($SHMID, $Cache, 0, $SHMSIZE)  or print STDERR "$prefix shmwrite failed \n";
                             semop($SEMID, $release_lock) or print STDERR "$prefix semop failed \n";
                         }
                     }
@@ -630,26 +721,39 @@ sub authz {
     }
 
     # check the results of the requirement checks
-    if ($Attr->{authoritative} eq 'on' && $user_result != OK && $group_result != OK) {
+    if ($Attr->{authoritative} eq 'on' && ($user_result != MP2 ? Apache2::Const::OK() : Apache::Constants::OK()) && ($group_result != MP2 ? Apache2::Const::OK() : Apache::Constants::OK())) {
         my $reason;
-        $reason .= " USER"  if $user_result  == AUTH_REQUIRED;
-        $reason .= " GROUP" if $group_result == AUTH_REQUIRED;
+        if ($user_result == MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED()) {
+          $reason .= " USER";
+        }
+        if ($group_result == MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED()) {
+          $reason .= " GROUP";
+        }
         $r->log_reason("DBI-Authoritative: Access denied on $reason rule(s)", $r->uri);
-        $r->note_basic_auth_failure if $authz_denied == AUTH_REQUIRED;
+        
+        if ($authz_denied == MP2 ? Apache2::Const::AUTH_REQUIRED() : Apache::Constants::AUTH_REQUIRED()) {
+          $r->note_basic_auth_failure;
+        }
         return $authz_denied;
     }
 
     # return OK if authorization was successful
-    if ($user_result == OK || $group_result == OK) {
-        printf STDERR "$prefix return OK\n" if $Apache::AuthDBI::DEBUG > 1;
-        return OK;
+    if (($user_result == MP2 ? Apache2::Const::OK() : Apache::Constants::OK()) || ($group_result == MP2 ? Apache2::Const::OK() : Apache::Constants::OK())) {
+        print STDERR "$prefix return OK\n" if $Apache::AuthDBI::DEBUG > 1;
+        return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
     }
 
     # otherwise fall through
-    printf STDERR "$prefix fall through, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
-    return DECLINED;
+    print STDERR "$prefix fall through, return DECLINED\n" if $Apache::AuthDBI::DEBUG > 1;
+    return MP2 ? Apache2::Const::DECLINED() : Apache::Constants::DECLINED();
 }
 
+
+sub dec2hex($) {
+    my ($dec) = @_;
+
+    return sprintf("%lx", $dec );
+}
 
 # The PerlChildInitHandler initializes the shared memory segment (first child)
 # or increments the child counter. 
@@ -659,17 +763,29 @@ sub childinit {
     my $prefix = "$$ Apache::AuthDBI         PerlChildInitHandler";
     # create (or re-use existing) semaphore set
 
+    my ($SHMKEY_hex);
+
+    $SHMKEY_hex = &dec2hex($SHMKEY);
+
+    print STDERR "$prefix SHMProjID = >$SHMPROJID< Shared Memory Key >$SHMKEY Decimal - $SHMKEY_hex Hex<\n" if $Apache::AuthDBI::DEBUG > 1;
+
     $SEMID = semget($SHMKEY, 1,
 		    IPC::SysV::IPC_CREAT() | IPC::SysV::S_IRUSR() | IPC::SysV::S_IWUSR());
     if (!defined($SEMID)) {
-      print STDERR "$prefix semget failed \n";
+      print STDERR "$prefix semget failed - SHMKEY $SHMKEY - Error $!\n";
+      if (uc(chomp($!)) eq 'PERMISSION DENIED') {
+        print STDERR " $prefix Read/Write Permission Denied to Shared Memory Array.\n";
+        print STDERR " $prefix Use ipcs -s to list semaphores and look for $SHMKEY_hex. If found, shutdown Apache and use ipcrm sem $SHMKEY_hex to remove the colliding (and hopefully unused) semaphore.  See documentation for setProjID for more information. \n";
+      }
       return;
+      
     }
+
     # create (or re-use existing) shared memory segment
     $SHMID = shmget($SHMKEY, $SHMSIZE,
 		    IPC::SysV::IPC_CREAT() | IPC::SysV::S_IRUSR() | IPC::SysV::S_IWUSR());
     if (!defined($SHMID)) {
-      print STDERR "$prefix shmget failed \n";
+      print STDERR "$prefix shmget failed - Error $!\n";
       return;
     }
     # make ids accessible to other handlers
@@ -677,7 +793,7 @@ sub childinit {
     $ENV{AUTH_SHMID} = $SHMID;
     # read shared memory, increment child count and write shared memory segment
     semop($SEMID, $obtain_lock) or print STDERR "$prefix semop failed \n";
-    shmread($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmread failed \n";
+    shmread($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmread failed \n";
     substr($Cache, index($Cache, "\0")) = '';
     my $child_count_new = 1;
     if ($Cache =~ /^(\d+)$;(\d+)\n/) { # segment already exists (eg start of additional server)
@@ -689,7 +805,7 @@ sub childinit {
         $Cache = time . "$;$child_count_new\n";
     }
     print STDERR "$prefix child count = $child_count_new \n" if $Apache::AuthDBI::DEBUG > 1;
-    shmwrite($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmwrite failed \n";
+    shmwrite($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmwrite failed \n";
     semop($SEMID, $release_lock) or print STDERR "$prefix semop failed \n";
     1;
 }
@@ -703,7 +819,7 @@ sub childexit {
     my $prefix = "$$ Apache::AuthDBI         PerlChildExitHandler";
     # read Cache from shared memory, decrement child count and exit or write Cache to shared memory
     semop($SEMID, $obtain_lock) or print STDERR "$prefix semop failed \n";
-    shmread($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmread failed \n";
+    shmread($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmread failed \n";
     substr($Cache, index($Cache, "\0")) = '';
     $Cache =~ /^(\d+)$;(\d+)\n/;
     my $time_stamp  = $1;
@@ -713,7 +829,7 @@ sub childexit {
         print STDERR "$prefix child count = $child_count \n" if $Apache::AuthDBI::DEBUG > 1;
         # write Cache into shared memory
         $Cache =~ s/^$time_stamp$;$child_count\n/$time_stamp$;$child_count_new\n/;
-        shmwrite($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmwrite failed \n";
+        shmwrite($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmwrite failed \n";
         semop($SEMID, $release_lock) or print STDERR "$prefix semop failed \n";
     } else { # last child
         # remove shared memory segment and semaphore set
@@ -734,7 +850,7 @@ sub cleanup {
     my $now = time;
     if ($SHMID) { # do we keep the cache in shared memory ?
         semop($SEMID, $obtain_lock) or print STDERR "$prefix semop failed \n";
-        shmread($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmread failed \n";
+        shmread($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmread failed \n";
         substr($Cache, index($Cache, "\0")) = ''; 
     }
     my $newCache = "$now$;"; # initialize timestamp for CleanupHandler
@@ -756,12 +872,67 @@ sub cleanup {
     }
     $Cache = $newCache;
     if ($SHMID) { # write Cache to shared memory
-        shmwrite($SHMID, $Cache, 0, $SHMSIZE) or printf STDERR "$prefix shmwrite failed \n";
+        shmwrite($SHMID, $Cache, 0, $SHMSIZE) or print STDERR "$prefix shmwrite failed \n";
         semop($SEMID, $release_lock) or print STDERR "$prefix semop failed \n";
     }
     1;
 }
 
+# Added 06-14-2005 - KAM - Returns SHA1 digest - Modified from PerlCMS' more generic routine to remove IO::File requirement
+sub SHA1_digest {
+  my $prefix = "$$ Apache::AuthDBI         SHA1_digest";
+  print STDERR "$prefix \n" if $Apache::AuthDBI::DEBUG > 1;
+  my (%params) = @_;
+  my ($sha1);
+
+  $params{'format'} ||= "base64";
+
+  $sha1 = Digest::SHA1->new;
+
+  if ($params{'text'} ne '') {
+    $sha1->add($params{'text'});
+  } else {
+    return -1;
+  }
+  
+  if ($params{'format'} =~ /base64/i) {
+    return $sha1->b64digest;
+  } elsif ($params{'format'} =~ /hex/i) {
+    return $sha1->hexdigest;
+  } elsif ($params{'format'} =~ /binary/i) {
+    return $sha1->binary;
+  }
+
+  return -1;
+}
+
+# Added 06-20-2005 - KAM - Returns MD5 digest - Modified from PerlCMS' more generic routine to remove IO::File requirement
+sub MD5_digest {
+  my $prefix = "$$ Apache::AuthDBI         MD5_digest";
+  print STDERR "$prefix \n" if $Apache::AuthDBI::DEBUG > 1;
+  my (%params) = @_;
+  my ($md5);
+
+  $params{'format'} ||= "hex";
+
+  $md5 = Digest::MD5->new;
+
+  if ($params{'text'} ne '') {
+    $md5->add($params{'text'});
+  } else {
+    return -1;
+  }
+
+  if ($params{'format'} =~ /base64/i) {
+    return $md5->b64digest;
+  } elsif ($params{'format'} =~ /hex/i) {
+    return $md5->hexdigest;
+  } elsif ($params{'format'} =~ /binary/i) {
+    return $md5->digest;
+  }
+
+  return -1;
+}
 
 1;
 
@@ -1009,7 +1180,16 @@ Auth_DBI_encrypted  < on / off > (Authentication only)
 Default is 'on'. When set to 'on', the password retrieved from the database 
 is assumed to be crypted. Hence the incoming password will be crypted before 
 comparison. When this directive is set to 'off', the comparison is done directly 
-with the plain-text entered password. 
+with the plain-text entered password.
+
+=item *
+Auth_DBI_encryption_method < sha1hex/md5hex/crypt > (Authentication only)
+
+Default is blank. When set to one or more encryption method, the password retrieved 
+from the database is assumed to be crypted. Hence the incoming password will be crypted 
+before comparison.  The method supports falling back so specifying 'sha1hex/md5hex' would
+allow for a site that is upgrading to sha1 to support both methods.  sha1 is the
+recommended method.
 
 =item *
 Auth_DBI_encryption_salt < password / userid > (Authentication only)
@@ -1068,6 +1248,26 @@ CleanupHandler after every request. For a heavily loaded server this should be
 set to a value, which reflects a compromise between scanning a large cache 
 possibly containing many outdated entries and between running many times the 
 CleanupHandler on a cache containing only few entries. 
+
+ Apache::AuthDBI->setProjID(1);
+
+This configures the project ID used to create a semaphore ID for shared memory.
+It can be set to any integer 1 to 255 or it will default to a value of 1. 
+
+NOTE: This must be set prior to calling initIPC.
+
+If you are running multiple instances of Apache on the same server (for example,
+Apache1 and Apache2), you may not want (or be able) to use shared memory between 
+them.  In this case, use a different project ID on each server.
+
+If you are reading this because you suspect you have a permission issue or a
+collision with a semaphore, use 'ipcs -s' to list semaphores and look for the
+Semaphore ID from the apache error log.  If found, shutdown Apache (all of them)
+and use 'ipcrm sem <semaphore key>' to remove the colliding (and hopefully unused) 
+semaphore.  
+
+You may also want to remove any orphaned shared memory segments by using
+'ipcs -m' and removing the orphans with ipcrm shm <shared memory id>.
 
  Apache::AuthDBI->initIPC(50000);
 

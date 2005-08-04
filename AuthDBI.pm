@@ -1,6 +1,6 @@
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '0.98';
+$Apache::AuthDBI::VERSION = '0.99';
 
 # 1: report about cache miss
 # 2: full debug output

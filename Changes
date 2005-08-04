@@ -1,13 +1,18 @@
 Revision history for ApacheDBI.
 
+0.99  08/03/2005
+  - Turn off Debugging by default.
+    Reported by <jonanderson@seren.com>
+    [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+
 0.98	06/30/2005
 	- Fix MP2 issue with $Apache::Server::Starting
 	Reported by Vincent Moneymaker vbmonymaker@hotmail.com
-	[Philip M. Gollucci <pgollucci@p6m7g8.com>
+	[Philip M. Gollucci <pgollucci@p6m7g8.com>]
 
 0.97	06/27/2005
 	- Fix minor use strict bug in make test
-	[Philip M. Gollucci <pgollucci@p6m7g8.com>
+	[Philip M. Gollucci <pgollucci@p6m7g8.com>]
 
         - Fixed a bug in salt calculation
 	  Kevin A. McGrail (ThoughtWorthy Media, Inc.) 

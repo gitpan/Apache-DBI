@@ -10,11 +10,11 @@ use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.98';
+$Apache::DBI::VERSION = '0.99';
 
 # 1: report about new connect
 # 2: full debug output
-$Apache::DBI::DEBUG = 2;
+$Apache::DBI::DEBUG = 0;
 #DBI->trace(2);
 
 my %Connected;    # cache for database handles

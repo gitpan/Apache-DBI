@@ -10,7 +10,7 @@ use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.99';
+$Apache::DBI::VERSION = '0.100';
 
 # 1: report about new connect
 # 2: full debug output
@@ -22,8 +22,9 @@ my @ChildConnect; # connections to be established when a new httpd child is crea
 my %Rollback;     # keeps track of pushed PerlCleanupHandler which can do a rollback after the request has finished
 my %PingTimeOut;  # stores the timeout values per data_source, a negative value de-activates ping, default = 0
 my %LastPingTime; # keeps track of last ping per data_source
-my $Idx;          # key of %Connected and %Rollback.
 
+# Check to see if we need to reset TaintIn and TaintOut
+my $TaintInOut = ($DBI::VERSION>=1.31)?1:0;
 
 # supposed to be called in a startup script.
 # stores the data_source of all connections, which are supposed to be created upon
@@ -76,7 +77,7 @@ sub connect {
     my $dsn    = "dbi:$drh->{Name}:$args[0]";
     my $prefix = "$$ Apache::DBI            ";
 
-    $Idx = join $;, $args[0], $args[1], $args[2];
+    my $Idx = join $;, $args[0], $args[1], $args[2]; # key of %Connected and %Rollback.
 
     # the hash-reference differs between calls even in the same
     # process, so de-reference the hash-reference 
@@ -110,19 +111,21 @@ sub connect {
         }   
     }
 
-    # this PerlCleanupHandler is supposed to initiate a rollback after the script has finished if AutoCommit is off.
-    my $needCleanup = ($Idx =~ /AutoCommit[^\d]+0/) ? 1 : 0;
-    if(!$Rollback{$Idx} and $needCleanup and Apache->can('push_handlers')) {
+    # this PerlCleanupHandler is supposed to initiate a rollback after the
+    # script has finished if AutoCommit is off.  however, cleanup can only
+    # be determined at end of handle life as begin_work may have been called
+    # to temporarily turn off AutoCommit.
+    if(!$Rollback{$Idx} and Apache->can('push_handlers')) {
         print STDERR "$prefix push PerlCleanupHandler \n" if $Apache::DBI::DEBUG > 1;
-				if ($ENV{MOD_PERL_API_VERSION} == 2) {
-					require Apache2::ServerUtil;
-					my $s = Apache2::ServerUtil->server;
-					$s->push_handlers("PerlCleanupHandler", \&cleanup);
-				}
-				else {
-        	Apache->push_handlers("PerlCleanupHandler", \&cleanup);
-				}
-        # make sure, that the rollback is called only once for every 
+        if ($ENV{MOD_PERL_API_VERSION} == 2) {
+            require Apache2::ServerUtil;
+            my $s = Apache2::ServerUtil->server;
+            $s->push_handlers("PerlCleanupHandler", sub { cleanup($Idx) });
+        }
+        else {
+            Apache->push_handlers("PerlCleanupHandler", sub { cleanup($Idx) });
+        }
+        # make sure, that the rollback is called only once for every
         # request, even if the script calls connect more than once
         $Rollback{$Idx} = 1;
     }
@@ -131,9 +134,11 @@ sub connect {
     $PingTimeOut{$dsn}  = 0 unless $PingTimeOut{$dsn};
     $LastPingTime{$dsn} = 0 unless $LastPingTime{$dsn};
     my $now = time;
-    my $needping = (($PingTimeOut{$dsn} == 0 or $PingTimeOut{$dsn} > 0)
-		    and (($now - $LastPingTime{$dsn}) >= $PingTimeOut{$dsn})
-		   ) ? 1 : 0;
+    # Must ping if TimeOut = 0 else base on time
+    my $needping = ($PingTimeOut{$dsn} == 0 or
+                    ($PingTimeOut{$dsn} > 0 and
+                     $now - $LastPingTime{$dsn} > $PingTimeOut{$dsn})
+                   ) ? 1 : 0;
     print STDERR "$prefix need ping: ", $needping == 1 ? "yes" : "no", "\n" if $Apache::DBI::DEBUG > 1;
     $LastPingTime{$dsn} = $now;
 
@@ -144,6 +149,10 @@ sub connect {
     # RaiseError being on and the handle is invalid.
     if ($Connected{$Idx} and (!$needping or eval{$Connected{$Idx}->ping})) {
         print STDERR "$prefix already connected to '$Idx'\n" if $Apache::DBI::DEBUG > 1;
+
+        # Force clean up of handle in case previous transaction failed to clean up the handle
+        &reset_startup_state($Idx);
+
         return (bless $Connected{$Idx}, 'Apache::DBI::db');
     }
 
@@ -152,6 +161,9 @@ sub connect {
     delete $Connected{$Idx};
     $Connected{$Idx} = $drh->connect(@args);
     return undef if !$Connected{$Idx};
+
+    # store the parameters of the initial connection in the handle
+    set_startup_state($Idx);
 
     # return the new database handle
     print STDERR "$prefix new connect to '$Idx'\n" if $Apache::DBI::DEBUG;
@@ -180,6 +192,7 @@ sub childinit {
 # Note: the PerlCleanupHandler runs after the response has been sent to the client
 
 sub cleanup {
+    my $Idx = shift;
     my $prefix = "$$ Apache::DBI            ";
     print STDERR "$prefix PerlCleanupHandler \n" if $Apache::DBI::DEBUG > 1;
     my $dbh = $Connected{$Idx};
@@ -187,6 +200,49 @@ sub cleanup {
         print STDERR "$prefix PerlCleanupHandler rollback for $Idx \n" if $Apache::DBI::DEBUG > 1;
     }
     delete $Rollback{$Idx};
+    1;
+}
+
+# Store the default start state of each dbh in the handle
+# Note: This uses private_Apache_DBI hash ref to store it in the handle itself
+
+sub set_startup_state {
+    my $Idx = shift;
+    foreach my $key qw{ AutoCommit Warn CompatMode InactiveDestroy 
+                        PrintError RaiseError HandleError 
+                        ShowErrorStatement TraceLevel FetchHashKeyName 
+                        ChopBlanks LongReadLen LongTruncOk 
+                        Taint Profile} {
+        $Connected{$Idx}->{private_Apache_DBI}{$key} = $Connected{$Idx}->{$key};
+    }
+    if ($TaintInOut) {
+        foreach my $key qw{ TaintIn TaintOut } {
+            $Connected{$Idx}->{private_Apache_DBI}{$key} = $Connected{$Idx}->{$key};
+        }
+    }
+    1;
+}
+
+
+# Restore the default start state of each dbh
+
+sub reset_startup_state {
+    my $Idx = shift;
+    # Rollback current transaction if currently in one
+    $Connected{$Idx}->{Active} and !$Connected{$Idx}->{AutoCommit} and eval {$Connected{$Idx}->rollback};
+
+    foreach my $key qw{ AutoCommit Warn CompatMode InactiveDestroy 
+                        PrintError RaiseError HandleError 
+                        ShowErrorStatement TraceLevel FetchHashKeyName 
+                        ChopBlanks LongReadLen LongTruncOk 
+                        Taint Profile } {
+        $Connected{$Idx}->{$key} = $Connected{$Idx}->{private_Apache_DBI}{$key};
+    }
+    if ($TaintInOut) {
+        foreach my $key qw{ TaintIn TaintOut } {
+            $Connected{$Idx}->{$key} = $Connected{$Idx}->{private_Apache_DBI}{$key};
+        }
+    }
     1;
 }
 
@@ -345,8 +401,10 @@ every script. In order to avoid inconsistencies in the database in case
 AutoCommit is off and the script finishes without an explicit rollback, the 
 Apache::DBI module uses a PerlCleanupHandler to issue a rollback at the
 end of every request. Note, that this CleanupHandler will only be used, if 
-the initial data_source sets AutoCommit = 0. It will not be used, if AutoCommit 
-will be turned off, after the connect has been done. 
+the initial data_source sets AutoCommit = 0 or AutoCommit is turned off, after 
+the connect has been done (ie begin_work). However, because a connection may have
+set other parameters, the handle is reset to its initial connection state before 
+it is returned for a second time.
 
 This module plugs in a menu item for Apache::Status or Apache2::Status. 
 The menu lists the current database connections. It should be considered 

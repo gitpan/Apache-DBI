@@ -3,14 +3,26 @@ use strict;
 
 # $Id: DBI.pm,v 1.12 2004/02/18 00:18:50 ask Exp $
 
-BEGIN { eval { require Apache } }
-BEGIN { eval { require mod_perl2; require Apache2::Module; } }
+use constant MP2 => (exists $ENV{MOD_PERL_API_VERSION} && 
+    $ENV{MOD_PERL_API_VERSION} == 2) ? 1 : 0;
+
+BEGIN { 
+    if (MP2) {
+        require mod_perl2; 
+        require Apache2::Module; 
+        require Apache2::ServerUtil;
+    }
+    elsif (defined $modperl::VERSION && $modperl::VERSION > 1 && 
+        $modperl::VERSION < 1.99) {
+        require Apache;
+    }
+}
 use DBI ();
 use Carp qw(carp);
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '0.100';
+$Apache::DBI::VERSION = '0.9901';
 
 # 1: report about new connect
 # 2: full debug output
@@ -33,19 +45,19 @@ my $TaintInOut = ($DBI::VERSION>=1.31)?1:0;
 sub connect_on_init { 
     # provide a handler which creates all connections during server startup
 
-		if ($ENV{MOD_PERL_API_VERSION} == 2) {
-			if (!@ChildConnect) {
-				require Apache2::ServerUtil;
-				my $s = Apache2::ServerUtil->server;
-				$s->push_handlers(PerlChildInitHandler => \&childinit);
-			}
-		}
-		else {
-   		carp "Apache.pm was not loaded\n" and return unless $INC{'Apache.pm'};
-   		if (!@ChildConnect and Apache->can('push_handlers')) {
-     	  Apache->push_handlers(PerlChildInitHandler => \&childinit);
-   		}
-		}
+    if (MP2) {
+        if (!@ChildConnect) {
+             my $s = Apache2::ServerUtil->server;
+             $s->push_handlers(PerlChildInitHandler => \&childinit);
+        }
+    }
+    else {
+        carp "Apache.pm was not loaded\n" and return unless $INC{'Apache.pm'};
+        if (!@ChildConnect and Apache->can('push_handlers')) {
+            Apache->push_handlers(PerlChildInitHandler => \&childinit);
+        }
+    }
+
     # store connections
     push @ChildConnect, [@_];
 }
@@ -98,7 +110,7 @@ sub connect {
     # unpredictable query results.
 
     ## See: http://perl.apache.org/docs/2.0/user/porting/compat.html#C__Apache__Server__Starting__and_C__Apache__Server__ReStarting_
-    if (exists $ENV{MOD_PERL_API_VERSION} && $ENV{MOD_PERL_API_VERSION} == 2) {
+    if (MP2) {
         require Apache2::ServerUtil;
         if (Apache2::ServerUtil::restart_count() == 1) {
           print STDERR "$prefix skipping connection during server startup, read the docu !!\n" if $Apache::DBI::DEBUG > 1;
@@ -117,8 +129,7 @@ sub connect {
     # to temporarily turn off AutoCommit.
     if(!$Rollback{$Idx} and Apache->can('push_handlers')) {
         print STDERR "$prefix push PerlCleanupHandler \n" if $Apache::DBI::DEBUG > 1;
-        if ($ENV{MOD_PERL_API_VERSION} == 2) {
-            require Apache2::ServerUtil;
+        if (MP2) {
             my $s = Apache2::ServerUtil->server;
             $s->push_handlers("PerlCleanupHandler", sub { cleanup($Idx) });
         }
@@ -274,7 +285,7 @@ sub all_handlers {
 
 
 # prepare menu item for Apache::Status
-if (exists $ENV{MOD_PERL_API_VERSION} && $ENV{MOD_PERL_API_VERSION} == 2) {
+if (MP2) {
 	Apache2::Status->menu_item(
     'DBI' => 'DBI connections',
     sub {

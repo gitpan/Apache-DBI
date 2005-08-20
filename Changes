@@ -1,5 +1,16 @@
 Revision history for ApacheDBI.
 
+0.9901 08/19/2005
+
+  - Fix the versioning blunder of .100 < .99
+    [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+
+  - Account for the case of mp1 and mp2 installed
+    in the same perl tree. The evals were not playing
+    nice with modules like Apache::SSI, Apache::SessionManager.
+    Sumitted by: [Frank Maas <frank.maas@cheiron-it.nl>]
+    Tweaked/reviewed by: [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+
 0.100 08/10/2005
 
   - Move $Idx from a file-scoped variable to a connect() scoped

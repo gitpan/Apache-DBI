@@ -1,7 +1,7 @@
 DESCRIPTION:
 ------------
 
-This is version 0.9901 of Apache::AuthDBI and Apache::DBI.
+This is version 1.00_01 of Apache::AuthDBI and Apache::DBI.
 
 These modules are supposed to be used with the Apache server together with 
 an embedded perl interpreter like mod_perl. They provide support for basic 
@@ -26,16 +26,14 @@ modules.  It can be considered stable.
 RECENT CHANGES:
 ---------------
 
- - This or one of the next versions are likely to be renamed to 1.00!
-
   See the Changes file for more detail
 
 
 DEVELOPMENT:
 ------------
 
-Apache::DBI is in CVS at perl.org; see
-http://cvs.perl.org/info?module=Apache/DBI/
+Apache::DBI is in svn at perl.org; see
+http://svn.perl.org/modules/Apache-DBI
 
 
 EXAMPLES:
@@ -269,7 +267,6 @@ If this doesn't help, please send an email to <modperl@apache.org> and include
 the following information in your bug-report:
 
  - debug output,
- - output of perl -v,
  - output of perl -V,
  - version of ApacheDBI,
  - version of DBI,
@@ -307,7 +304,7 @@ DBI      by Tim Bunce       dbi-users-subscribe@perl.org
                             http://dbi.perl.org/
 
 Apache   by Apache Group    news:comp.infosystems.www.servers.unix
-			    users-subscribe@httpd.apache.org
+                            users-subscribe@httpd.apache.org
                             http://httpd.apache.org/
 
 
@@ -315,6 +312,6 @@ Apache   by Apache Group    news:comp.infosystems.www.servers.unix
 
    Edmund Mergl <E.Mergl@bawue.de>
    Ask Bjoern Hansen <ask@develooper.com>
-
+   Philip M. Gollucci <pgollucci@p6m7g8.com>
 
 ---------------------------------------------------------------------------

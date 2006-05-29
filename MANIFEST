@@ -1,13 +1,11 @@
-AuthDBI.pm
 Changes
-DBI.pm
 MANIFEST
 Makefile.PL
 README
-eg/mod_perl.conf
 eg/startup.pl
-eg/startup2.pl
-eg/startup3.pl
-traces.txt
+lib/Apache/AuthDBI.pm
+lib/Apache/DBI.pm
 t/10mysql.t
+t/TODO
+traces.txt
 META.yml                                 Module meta-data (added by MakeMaker)

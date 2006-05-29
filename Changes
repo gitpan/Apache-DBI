@@ -1,5 +1,44 @@
 Revision history for ApacheDBI.
 
+1.00_01
+
+  - As DBI has supported only perl 5.6.0 since 2003
+    v1.38 Apache::DBI now requires perl 5.6.0 as well.
+    [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+
+  - Fix a plethora of uninitialized variable warnings, 
+    general code cleanup, don't import unneeded symbols
+    from Carp, Digest::SHA1, and Digest::MD5
+    [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+
+  - http://rt.cpan.org/Ticket/Display.html?id=17073
+    $sth->rows is inconsistent across DBD::* drivers
+    and sometimes always returns 0.  We were using 
+    this to distinguish between a blank password and
+    no passwd.  Now we don't call this function.
+
+    Reported by: rkimmelmann@web.de 
+    [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+  
+  - http://rt.cpan.org/Ticket/Display.html?id=17422
+    a fatal error involving mp1, mp2 constants co-existance 
+    was fixed in AuthDBI.
+    [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+
+  - http://rt.cpan.org/Ticket/Display.html?id=17446
+    under mod_perl 2, the check to skip caching connections
+    at server startup was broken; thus, causing children
+    to incorrectly share dbh handles with the parent.
+    Submitted by: clinton@traveljury.com 
+
+  - http://rt.cpan.org/Ticket/Display.html?id=19491
+    a critical return was missing connect() under mod_perl2
+    Submitted by: perrin@elem.com
+
+  - Moved module's repository to its new home in SVN from CVS
+    http://svn.perl.org/modules/Apache-DBI
+    [Philip M. Gollucci <pgollucci@p6m7g8.com>]
+
 0.9901 08/19/2005
 
   - Fix the versioning blunder of .100 < .99

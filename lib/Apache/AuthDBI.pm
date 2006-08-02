@@ -1,7 +1,7 @@
-# $Id: AuthDBI.pm 6423 2006-05-29 10:50:24Z pgollucci@p6m7g8.com $
+# $Id: AuthDBI.pm 6742 2006-08-02 10:36:59Z pgollucci@p6m7g8.com $
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '1.01';
+$Apache::AuthDBI::VERSION = '1.02';
 
 # 1: report about cache miss
 # 2: full debug output
@@ -587,7 +587,7 @@ sub get_passwds_to_check {
 
         #WE DIDN'T GET ANY PASSWORDS TO CHECK.  MUST BE A PROBLEM
         if (scalar(@passwds_to_check) < 1) {
-            denug (2, "$prefix Error: No Valid Encryption Method Specified");
+            debug (2, "$prefix Error: No Valid Encryption Method Specified");
         }
     }
     else {

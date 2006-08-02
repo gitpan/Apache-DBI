@@ -1,5 +1,11 @@
 Revision history for ApacheDBI.
 
+1.02 08/02/2006
+
+  - http://rt.cpan.org/Ticket/Display.html?id=20808
+    s/denug/debug/ typo in Apache::AuthDBI
+    Submitted by: Vladimir S. Tikhonjuk <vst@vst.donetsk.ua>
+
 1.01 06/04/2006
 
   - Re-release as non developer release.

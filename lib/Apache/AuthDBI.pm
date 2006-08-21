@@ -1,7 +1,7 @@
-# $Id: AuthDBI.pm 6742 2006-08-02 10:36:59Z pgollucci@p6m7g8.com $
+# $Id: AuthDBI.pm 6820 2006-08-21 16:01:35Z pgollucci@p6m7g8.com $
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '1.02';
+$Apache::AuthDBI::VERSION = '1.03';
 
 # 1: report about cache miss
 # 2: full debug output
@@ -217,7 +217,10 @@ sub authen {
 
     # here the dialog pops up and asks you for username and password
     my ($res, $passwd_sent) = $r->get_basic_auth_pw;
-    debug (2, "$prefix get_basic_auth_pw: res = >$res<, password sent = >$passwd_sent<");
+    {
+      no warnings qw(uninitialized);
+      debug (2, "$prefix get_basic_auth_pw: res = >$res<, password sent = >$passwd_sent<");
+    }
     return $res if $res; # e.g. HTTP_UNAUTHORIZED
 
     # get username
@@ -719,8 +722,8 @@ sub authz {
     }
 
     # check for users
-    if (($user_result != MP2 ? Apache2::Const::OK() :
-         Apache::Constants::OK()) && $user_requirements) {
+    if (($user_result != (MP2 ? Apache2::Const::OK() :
+         Apache::Constants::OK())) && $user_requirements) {
 
         $user_result = MP2 ? Apache2::Const::AUTH_REQUIRED() :
             Apache::Constants::AUTH_REQUIRED();
@@ -905,9 +908,9 @@ sub authz {
     # check the results of the requirement checks
     if ($Attr->{authoritative} eq 'on' &&
         (
-         $user_result != MP2 ?
+         $user_result != (MP2 ?
          Apache2::Const::OK() :
-         Apache::Constants::OK()
+         Apache::Constants::OK())
         )
         && (
             $group_result != MP2 ? Apache2::Const::OK() :

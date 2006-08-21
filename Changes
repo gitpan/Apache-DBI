@@ -1,5 +1,16 @@
 Revision history for ApacheDBI.
 
+1.03 08/21/2006
+
+  - MP1: Undefined subroutine &Apache2::Const::OK called at
+    Apache/AuthDBI.pm line 906. 
+    Submitted by: [Philip.Garrett@manheim.com]
+    Reviewed by: Kevin A. McGrail (ThoughtWorthy Media, Inc.) 
+  
+  - http://rt.cpan.org/Ticket/Display.html?id=20809
+    avoid a warnings caused by debug statements
+    Reported by: Vladimir S. Tikhonjuk <vst@vst.donetsk.ua>
+
 1.02 08/02/2006
 
   - http://rt.cpan.org/Ticket/Display.html?id=20808

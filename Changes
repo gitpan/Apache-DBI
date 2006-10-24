@@ -1,5 +1,12 @@
 Revision history for ApacheDBI.
 
+1.04 10/23/2006
+  - MP1: Undefined subroutine &Apache2::Const::OK called at ....
+    (The rest of them) d'oh!
+
+  Seconded by: Kjetil Kjernsmo <kjetil@kjernsmo.net>
+  Submitted by: BOWMANBS <BOWMANBS@cpan.org>
+
 1.03 08/21/2006
 
   - MP1: Undefined subroutine &Apache2::Const::OK called at

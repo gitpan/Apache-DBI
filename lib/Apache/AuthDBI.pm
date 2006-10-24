@@ -1,7 +1,7 @@
-# $Id: AuthDBI.pm 6820 2006-08-21 16:01:35Z pgollucci@p6m7g8.com $
+# $Id: AuthDBI.pm 7961 2006-10-24 06:06:38Z pgollucci@p6m7g8.com $
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '1.03';
+$Apache::AuthDBI::VERSION = '1.04';
 
 # 1: report about cache miss
 # 2: full debug output
@@ -671,8 +671,8 @@ sub authz {
     unless ($ary_ref) {
         if ($Attr->{authoritative} eq 'on') {
             $r->log_reason("user $user_sent denied, no access rules specified (DBI-Authoritative)", $r->uri);
-            if ($authz_denied == MP2 ? Apache2::Const::AUTH_REQUIRED() :
-                Apache::Constants::AUTH_REQUIRED()) {
+            if ($authz_denied == (MP2 ? Apache2::Const::AUTH_REQUIRED() :
+                Apache::Constants::AUTH_REQUIRED())) {
                 $r->note_basic_auth_failure;
             }
             return $authz_denied;
@@ -913,17 +913,17 @@ sub authz {
          Apache::Constants::OK())
         )
         && (
-            $group_result != MP2 ? Apache2::Const::OK() :
-            Apache::Constants::OK()
+            $group_result != (MP2 ? Apache2::Const::OK() :
+            Apache::Constants::OK())
            )
        ) {
         my $reason;
-        if ($user_result == MP2 ? Apache2::Const::AUTH_REQUIRED() :
-            Apache::Constants::AUTH_REQUIRED()) {
+        if ($user_result == (MP2 ? Apache2::Const::AUTH_REQUIRED() :
+            Apache::Constants::AUTH_REQUIRED())) {
             $reason .= " USER";
         }
-        if ($group_result == MP2 ? Apache2::Const::AUTH_REQUIRED() :
-            Apache::Constants::AUTH_REQUIRED()) {
+        if ($group_result == (MP2 ? Apache2::Const::AUTH_REQUIRED() :
+            Apache::Constants::AUTH_REQUIRED())) {
             $reason .= " GROUP";
         }
         $r->log_reason(
@@ -931,8 +931,8 @@ sub authz {
                        $r->uri
                       );
 
-        if ($authz_denied == MP2 ? Apache2::Const::AUTH_REQUIRED() :
-            Apache::Constants::AUTH_REQUIRED()) {
+        if ($authz_denied == (MP2 ? Apache2::Const::AUTH_REQUIRED() :
+            Apache::Constants::AUTH_REQUIRED())) {
             $r->note_basic_auth_failure;
         }
 

@@ -1,7 +1,7 @@
-# $Id: AuthDBI.pm 8010 2006-11-04 06:17:42Z pgollucci@p6m7g8.com $
+# $Id: AuthDBI.pm 9303 2007-03-23 08:56:44Z pgollucci@p6m7g8.com $
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '1.05';
+$Apache::AuthDBI::VERSION = '1.06';
 
 # 1: report about cache miss
 # 2: full debug output
@@ -29,7 +29,7 @@ use Digest::SHA1 ();
 use Digest::MD5 ();
 
 sub debug {
-    print STDERR "$_[1]\n" if $_[0] >= $Apache::AuthDBI::DEBUG;
+    print STDERR "$_[1]\n" if $_[0] <= $Apache::AuthDBI::DEBUG;
 }
 
 sub push_handlers {
@@ -1538,10 +1538,23 @@ debug output.
 
 =head1 PREREQUISITES
 
+=head2 MOD_PERL 2.0
+
+Apache::DBI version 0.96 and should work under mod_perl 2.0 RC5 and later
+with httpd 2.0.49 and later.
+
+Apache::DBI versions less than 1.00 are NO longer supported.  Additionally, 
+mod_perl versions less then 2.0.0 are NO longer supported.
+
+=head2 MOD_PERL 1.0
 Note that this module needs mod_perl-1.08 or higher, apache_1.3.0 or higher
 and that mod_perl needs to be configured with the appropriate call-back hooks:
 
   PERL_AUTHEN=1 PERL_AUTHZ=1 PERL_CLEANUP=1 PERL_STACKED_HANDLERS=1
+
+Apache::DBI v0.94 was the last version before dual mod_perl 2.x support was begun.
+It still recommened that you use the latest version of Apache::DBI because Apache::DBI
+versions less than 1.00 are NO longer supported.
 
 =head1 SECURITY
 

@@ -1,10 +1,10 @@
 
-Showstoppers for 1.07:
-----------------------
-Migrate test suite to 1.07
+Showstoppers
+------------
+Migrate test suite [ ?? ]
 
-Nice to have for 1.07:
------------------------
+Nice to have
+------------
 Add tests for other DBDs starting with PostgreSQL.
 
 

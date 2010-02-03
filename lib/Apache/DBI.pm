@@ -1,4 +1,4 @@
-# $Id: DBI.pm 11230 2008-05-09 22:46:56Z pgollucci@p6m7g8.com $
+# $Id$
 package Apache::DBI;
 use strict;
 
@@ -22,7 +22,7 @@ use Carp ();
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '1.07';
+$Apache::DBI::VERSION = '1.08';
 
 # 1: report about new connect
 # 2: full debug output
@@ -141,7 +141,9 @@ sub connect {
     if (!$Rollback{$Idx}) {
         my $r;
         if (MP2) {
-            $r = Apache2::RequestUtil->request;
+            # We may not actually be in a request, but in <Perl> (or
+            # equivalent such as startup.pl), in which case this would die.
+            eval { $r = Apache2::RequestUtil->request };
         }
         elsif (Apache->can('push_handlers')) {
             $r = 'Apache';

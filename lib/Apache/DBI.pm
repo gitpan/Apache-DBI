@@ -1,4 +1,4 @@
-# $Id$
+# $Id: DBI.pm 907307 2010-02-06 20:55:46Z phred $
 package Apache::DBI;
 use strict;
 
@@ -22,7 +22,7 @@ use Carp ();
 
 require_version DBI 1.00;
 
-$Apache::DBI::VERSION = '1.08';
+$Apache::DBI::VERSION = '1.09';
 
 # 1: report about new connect
 # 2: full debug output
@@ -39,6 +39,9 @@ my %PingTimeOut;                # stores the timeout values per data_source,
                                 #   a negative value de-activates ping,
                                 #   default = 0
 my %LastPingTime;               # keeps track of last ping per data_source
+my $ChildExitHandlerInstalled;  # set to true on installation of
+                                # PerlChildExitHandler
+my $InChild;
 
 # Check to see if we need to reset TaintIn and TaintOut
 my $TaintInOut = ($DBI::VERSION >= 1.31) ? 1 : 0;
@@ -134,6 +137,23 @@ sub connect {
         }
     }
 
+    # this PerlChildExitHandler is supposed to disconnect all open
+    # connections to the database
+    if (!$ChildExitHandlerInstalled) {
+        $ChildExitHandlerInstalled = 1;
+        my $s;
+        if (MP2) {
+            $s = Apache2::ServerUtil->server;
+        }
+        elsif (Apache->can('push_handlers')) {
+            $s = 'Apache';
+        }
+        if ($s) {
+            debug(2, "$prefix push PerlChildExitHandler");
+            $s->push_handlers(PerlChildExitHandler => \&childexit);
+        }
+    }
+
     # this PerlCleanupHandler is supposed to initiate a rollback after the
     # script has finished if AutoCommit is off.  however, cleanup can only
     # be determined at end of handle life as begin_work may have been called
@@ -212,6 +232,22 @@ sub childinit {
             shift @$aref;
             DBI->connect(@$aref);
             $LastPingTime{@$aref[0]} = time;
+        }
+    }
+
+    1;
+}
+
+# The PerlChildExitHandler disconnects all open connections
+sub childexit {
+
+    my $prefix = "$$ Apache::DBI            ";
+    debug(2, "$prefix PerlChildExitHandler");
+
+    foreach my $dbh (values(%Connected)) {
+        eval { DBI::db::disconnect($dbh) };
+        if ($@) {
+            debug(2, "$prefix DBI::db::disconnect failed - $@");
         }
     }
 
@@ -517,7 +553,7 @@ and that mod_perl needs to be configured with the appropriate call-back hooks:
   PERL_CHILD_INIT=1 PERL_STACKED_HANDLERS=1
 
 Apache::DBI v0.94 was the last version before dual mod_perl 2.x support was begun.
-It still recommened that you use the latest version of Apache::DBI because Apache::DBI
+It still recommended that you use the latest version of Apache::DBI because Apache::DBI
 versions less than 1.00 are NO longer supported.
 
 =head1 DO YOU NEED THIS MODULE?
@@ -537,6 +573,8 @@ L<Apache>, L<mod_perl>, L<DBI>
 
 =head1 AUTHORS
 
+=over
+
 =item *
 Philip M. Gollucci <pgollucci@p6m7g8.com> is currently packaging new releases.
 
@@ -552,6 +590,8 @@ mod_perl by Doug MacEachern.
 
 =item *
 DBI by Tim Bunce <dbi-users-subscribe@perl.org>
+
+=back
 
 =head1 COPYRIGHT
 

@@ -1,5 +1,12 @@
 Revision history for ApacheDBI.
 
+1.09 November 11, 2010
+  - Fix pod errors
+    Submitted by: Damyan Ivanov <dmn@debian.org>
+
+  - Adds PerlChildExitHandler to disconnect existing connections
+    Submitted by: Nick Wellnhoffer <wellnhofer@aevum.de>
+
 1.08 February 3rd, 2010
   - Fix bug to allow DBI in startup.pl etc again
     Bug report from Adam Prime, patch from Lubomir Rintel

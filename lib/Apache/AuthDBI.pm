@@ -1,7 +1,7 @@
-# $Id$
+# $Id: AuthDBI.pm 907307 2010-02-06 20:55:46Z phred $
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '1.08';
+$Apache::AuthDBI::VERSION = '1.09';
 
 # 1: report about cache miss
 # 2: full debug output
@@ -1356,6 +1356,8 @@ section). The default is 0, which runs the CleanupHandler after every request.
 
 =head1 LIST OF TOKENS
 
+=over
+
 =item * Auth_DBI_data_source (Authentication and Authorization)
 
 The data_source value has the syntax 'dbi:driver:dsn'. This parameter is
@@ -1470,6 +1472,8 @@ Default is 'off'.  When set 'on', the select statement is prepared using a
 placeholder for the username.  This may result in improved performance for
 databases supporting this method.
 
+=back
+
 =head1 CONFIGURATION
 
 The module should be loaded upon startup of the Apache daemon.
@@ -1549,6 +1553,7 @@ Apache::DBI versions less than 1.00 are NO longer supported.  Additionally,
 mod_perl versions less then 2.0.0 are NO longer supported.
 
 =head2 MOD_PERL 1.0
+
 Note that this module needs mod_perl-1.08 or higher, apache_1.3.0 or higher
 and that mod_perl needs to be configured with the appropriate call-back hooks:
 
@@ -1580,6 +1585,8 @@ L<Apache>, L<mod_perl>, L<DBI>
 
 =head1 AUTHORS
 
+=over
+
 =item *
 Apache::AuthDBI by Edmund Mergl; now maintained and supported by the
 modperl mailinglist, subscribe by sending mail to 
@@ -1590,6 +1597,8 @@ mod_perl by Doug MacEachern.
 
 =item *
 DBI by Tim Bunce <dbi-users-subscribe@perl.org>
+
+=back
 
 =head1 COPYRIGHT
 

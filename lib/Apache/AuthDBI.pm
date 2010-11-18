@@ -1,4 +1,4 @@
-# $Id: AuthDBI.pm 907307 2010-02-06 20:55:46Z phred $
+# $Id$
 package Apache::AuthDBI;
 
 $Apache::AuthDBI::VERSION = '1.09';

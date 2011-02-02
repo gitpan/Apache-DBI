@@ -1,7 +1,7 @@
-# $Id$
+# $Id: AuthDBI.pm 1066624 2011-02-02 20:52:05Z phred $
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '1.09';
+$Apache::AuthDBI::VERSION = '1.10';
 
 # 1: report about cache miss
 # 2: full debug output
@@ -16,6 +16,7 @@ BEGIN {
 	require Apache2::Access;
     require Apache2::Const;
     require Apache2::RequestRec;
+    require Apache2::RequestUtil;
     require Apache2::Log;
     import Apache2::Const @constants;
   }

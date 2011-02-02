@@ -1,5 +1,10 @@
 Revision history for ApacheDBI.
 
+1.10 February 2, 2011
+  - Add Apache2::RequestUtil for mp2 instances.
+    Issue reported by wanradt@gmail.com
+    [Fred Moyer <fred@redhotpenguin.com>
+
 1.09 November 11, 2010
   - Fix pod errors
     Submitted by: Damyan Ivanov <dmn@debian.org>

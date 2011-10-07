@@ -1,5 +1,9 @@
 Revision history for ApacheDBI.
 
+1.11 October 7, 2011
+
+  - RT 69087, Perl 5.14 'Using qw(...) as parentheses' fix
+
 1.10 February 2, 2011
   - Add Apache2::RequestUtil for mp2 instances.
     Issue reported by wanradt@gmail.com

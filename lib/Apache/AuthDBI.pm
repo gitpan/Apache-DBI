@@ -1,7 +1,7 @@
-# $Id: AuthDBI.pm 1140245 2011-06-27 17:25:53Z phred $
+# $Id: AuthDBI.pm 1492087 2013-06-12 07:26:54Z phred $
 package Apache::AuthDBI;
 
-$Apache::AuthDBI::VERSION = '1.11';
+$Apache::AuthDBI::VERSION = '1.12';
 
 # 1: report about cache miss
 # 2: full debug output

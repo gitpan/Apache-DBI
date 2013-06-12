@@ -1,5 +1,11 @@
 Revision history for ApacheDBI.
 
+1.12 June 12, 2013
+
+  - Fix detection of server startup in mod_perl 2, to avoid caching
+    connections in the parent process. Perrin Harkins
+    <perrin@elem.com>
+
 1.11 October 7, 2011
 
   - RT 69087, Perl 5.14 'Using qw(...) as parentheses' fix
